@@ -42,6 +42,8 @@
 #include "lldb/Utility/StringExtractor.h"
 
 #include "Plugins/Process/POSIX/ProcessPOSIXLog.h"
+#include "Plugins/Process/HSA/NativeBreakpointHSA.h"
+#include "Plugins/Process/HSA/NativeThreadHSA.h"
 #include "NativeThreadLinux.h"
 #include "ProcFileReader.h"
 #include "Procfs.h"
@@ -214,6 +216,11 @@ namespace
 
     static constexpr unsigned k_ptrace_word_size = sizeof(void*);
     static_assert(sizeof(long) >= k_ptrace_word_size, "Size of long must be larger than ptrace word size");
+
+    //TODO improve
+    bool IsHSAThread (NativeThreadProtocol& thread) {
+        return thread.GetID() < 166;
+    }
 } // end of anonymous namespace
 
 // Simple helper function to ensure flags are enabled on the given file
@@ -400,8 +407,9 @@ NativeProcessProtocol::Attach (
     // Retrieve the architecture for the running process.
     ArchSpec process_arch;
     Error error = ResolveProcessArchitecture (pid, *platform_sp.get (), process_arch);
-    if (!error.Success ())
+    if (!error.Success ()) {
         return error;
+    }
 
     std::shared_ptr<NativeProcessLinux> native_process_linux_sp (new NativeProcessLinux ());
 
@@ -412,8 +420,9 @@ NativeProcessProtocol::Attach (
     }
 
     native_process_linux_sp->AttachToInferior (mainloop, pid, error);
-    if (!error.Success ())
+    if (!error.Success ()){
         return error;
+    }
 
     native_process_sp = native_process_linux_sp;
     return error;
@@ -429,7 +438,9 @@ NativeProcessLinux::NativeProcessLinux () :
     m_supports_mem_region (eLazyBoolCalculate),
     m_mem_region_cache (),
     m_mem_region_cache_mutex(),
-    m_pending_notification_tid(LLDB_INVALID_THREAD_ID)
+    m_pending_notification_tid(LLDB_INVALID_THREAD_ID),
+    m_hsa_debug(new NativeHSADebug(*this))
+
 {
 }
 
@@ -523,6 +534,8 @@ NativeProcessLinux::AttachToInferior (MainLoop &mainloop, lldb::pid_t pid, Error
 NativeProcessLinux::Launch(LaunchArgs *args, Error &error)
 {
     assert (args && "null args");
+
+    // Use a map to keep track of the threads which we have attached/need to attach.
 
     const char **argv = args->m_argv;
     const char **envp = args->m_envp;
@@ -1142,6 +1155,12 @@ NativeProcessLinux::WaitForNewThread(::pid_t tid)
     ThreadWasCreated(*new_thread_sp);
 }
 
+const HsaWavefronts& GetHSAWavefronts (NativeHSADebug& hsa_debug) {
+    while (hsa_debug.GetWavefrontInfo().empty()){}
+
+    return hsa_debug.GetWavefrontInfo();
+}
+
 void
 NativeProcessLinux::MonitorSIGTRAP(const siginfo_t &info, NativeThreadLinux &thread)
 {
@@ -1151,6 +1170,42 @@ NativeProcessLinux::MonitorSIGTRAP(const siginfo_t &info, NativeThreadLinux &thr
     assert(info.si_signo == SIGTRAP && "Unexpected child signal!");
 
     Mutex::Locker locker (m_threads_mutex);
+
+    if (info.si_code == 0) {
+        const auto& waves = GetHSAWavefronts(*m_hsa_debug);
+
+        for (auto thread_sp : m_hsa_threads) {
+            m_threads.erase(std::find(m_threads.begin(), m_threads.end(), thread_sp));
+        }
+
+        m_hsa_threads.clear();
+
+        if (log)
+            log->Printf ("NativeProcessLinux::%s() %" PRIu64 " wavefronts found", __FUNCTION__, waves.size());
+
+        for (const auto& wave : waves) {
+            NativeThreadHSASP hsa_thread = std::make_shared<NativeThreadHSA>(this, wave.GetGlobalID()+1, *m_hsa_debug);
+            m_threads.push_back(hsa_thread);
+            m_hsa_threads.push_back(hsa_thread);
+        }
+
+        if (log)
+            log->Printf ("NativeProcessLinux::%s() there are now %" PRIu64 " threads", __FUNCTION__, m_threads.size());
+
+        for (auto thread_sp : m_hsa_threads) {
+            if (m_hsa_debug->JustHitBreakpoint(thread_sp->GetID())) {
+                thread_sp->SetStoppedByBreakpoint();
+            }
+        }
+        thread.SetStoppedWithNoReason();
+        StopRunningThreads((*m_hsa_threads.begin())->GetID());
+        return;
+    }
+
+    
+    if (log)
+        log->Printf ("NativeProcessLinux::%s() pid %" PRIu64 " made thread", __FUNCTION__, thread.GetID());
+    SetCurrentThreadID(0);
 
     switch (info.si_code)
     {
@@ -1427,6 +1482,13 @@ NativeProcessLinux::MonitorSignal(const siginfo_t &info, NativeThreadLinux &thre
                             info.si_pid,
                             is_from_llgs ? "from llgs" : "not from llgs",
                             thread.GetID());
+    }
+
+    // Check for HSA binary notification
+    if (signo == SIGCHLD && m_hsa_debug->HasNewBinary()) {
+        thread.SetStoppedByHSASignal();
+        StopRunningThreads(thread.GetID());
+        return;
     }
 
     // Check for thread stop notification.
@@ -1722,17 +1784,36 @@ NativeProcessLinux::Resume (const ResumeActionList &resume_actions)
             assert (thread_sp && "thread list should not contain NULL threads");
 
             const ResumeAction *const action = resume_actions.GetActionForThread (thread_sp->GetID (), true);
+
             if (action == nullptr)
                 continue;
 
             if (action->state == eStateStepping)
             {
-                Error error = SetupSoftwareSingleStepping(static_cast<NativeThreadLinux &>(*thread_sp));
-                if (error.Fail())
-                    return error;
+                if (!IsHSAThread(*thread_sp)) {
+                    Error error = SetupSoftwareSingleStepping(static_cast<NativeThreadLinux &>(*thread_sp));
+                    if (error.Fail())
+                        return error;
+                }
             }
         }
     }
+
+
+    for (auto thread_sp : m_threads)
+    {
+        const ResumeAction *const action = resume_actions.GetActionForThread (thread_sp->GetID (), true);
+
+        if (action && (action->state == eStateStepping || action->state == eStateRunning))
+        {
+            // Run the thread, possibly feeding it the signal.
+            const int signo = action->signal;
+            if (IsHSAThread(*thread_sp)) {
+                ResumeHSAThread(static_cast<NativeThreadHSA &>(*thread_sp), action->state, signo);
+            }
+        }
+    }
+
 
     for (auto thread_sp : m_threads)
     {
@@ -1761,7 +1842,9 @@ NativeProcessLinux::Resume (const ResumeActionList &resume_actions)
         {
             // Run the thread, possibly feeding it the signal.
             const int signo = action->signal;
-            ResumeThread(static_cast<NativeThreadLinux &>(*thread_sp), action->state, signo);
+            if (!IsHSAThread(*thread_sp)) {
+                ResumeThread(static_cast<NativeThreadLinux &>(*thread_sp), action->state, signo);
+            }
             break;
         }
 
@@ -2275,10 +2358,31 @@ NativeProcessLinux::GetSoftwareBreakpointPCOffset(uint32_t &actual_opcode_size)
 Error
 NativeProcessLinux::SetBreakpoint (lldb::addr_t addr, uint32_t size, bool hardware)
 {
+    if (IsHSAAddress(addr)) 
+        return SetHSABreakpoint (addr, size, hardware);
     if (hardware)
         return Error ("NativeProcessLinux does not support hardware breakpoints");
     else
         return SetSoftwareBreakpoint (addr, size);
+}
+
+Error 
+NativeProcessLinux::SetHSABreakpoint (lldb::addr_t addr, uint32_t size, bool momentary)
+{
+    Log *log (GetLogIfAnyCategoriesSet (LIBLLDB_LOG_BREAKPOINTS));
+    if (log)
+        log->Printf ("NativeProcessProtocol::%s addr = 0x%" PRIx64 ", momentary = %d", __FUNCTION__, addr, momentary);
+
+    if (momentary) {
+        m_hsa_debug->SetMomentaryBreakpoint(addr);
+        return Error();
+    }
+    else {
+        return m_breakpoint_list.AddRef (addr, size, false,
+            [this] (lldb::addr_t addr, size_t size_hint, bool /* hardware */, NativeBreakpointSP &breakpoint_sp)->Error
+            { return NativeBreakpointHSA::CreateSoftwareBreakpoint (*this, *m_hsa_debug, addr, size_hint, breakpoint_sp); });
+    }
+
 }
 
 Error
@@ -2955,6 +3059,31 @@ NativeProcessLinux::GetThreadByID(lldb::tid_t tid)
 }
 
 Error
+NativeProcessLinux::ResumeHSAThread(NativeThreadHSA &thread, lldb::StateType state, int signo)
+{
+    switch (state)
+    {
+    case eStateRunning:
+    {
+        thread.SetRunning();
+        break;
+    }
+    case eStateStepping:
+    {
+        thread.SetStepping();
+        break;
+    }
+    default:
+        llvm_unreachable("Unhandled state for ResumeHSAThread");
+    }
+
+    if (thread.GetID() == 1)
+        m_hsa_debug->Continue();
+
+    return Error();
+}
+
+Error
 NativeProcessLinux::ResumeThread(NativeThreadLinux &thread, lldb::StateType state, int signo)
 {
     Log *const log = GetLogIfAllCategoriesSet (LIBLLDB_LOG_THREAD);
@@ -3019,10 +3148,32 @@ NativeProcessLinux::StopRunningThreads(const lldb::tid_t triggering_tid)
 
     // Request a stop for all the thread stops that need to be stopped
     // and are not already known to be stopped.
-    for (const auto &thread_sp: m_threads)
+    for (auto it = m_threads.begin(); it != m_threads.end();)
     {
-        if (StateIsRunningState(thread_sp->GetState()))
-            static_pointer_cast<NativeThreadLinux>(thread_sp)->RequestStop();
+        auto &thread_sp = *it;
+        if (log)
+        {
+            log->Printf("NativeProcessLinux::%s state is running? %d: (triggering_tid: %" PRIu64 ")",
+                        __FUNCTION__, StateIsRunningState(thread_sp->GetState()), thread_sp->GetID());
+        }
+
+
+        if (StateIsRunningState(thread_sp->GetState())) {
+            if (IsHSAThread(*thread_sp)) {
+                if (m_hsa_debug->IsKernelFinished()) {
+                    it = m_threads.erase(std::find(m_threads.begin(), m_threads.end(), thread_sp));
+                    continue;
+                }
+                else {
+                    static_pointer_cast<NativeThreadHSA>(thread_sp)->SetStoppedWithNoReason();
+                }
+            }
+            else {
+                static_pointer_cast<NativeThreadLinux>(thread_sp)->RequestStop();
+            }
+        }
+
+        ++it;
     }
 
     SignalIfAllThreadsStopped();
@@ -3036,17 +3187,22 @@ NativeProcessLinux::StopRunningThreads(const lldb::tid_t triggering_tid)
 void
 NativeProcessLinux::SignalIfAllThreadsStopped()
 {
+    // We have a pending notification and all threads have stopped.
+    Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS | LIBLLDB_LOG_BREAKPOINTS));
+
     if (m_pending_notification_tid == LLDB_INVALID_THREAD_ID)
         return; // No pending notification. Nothing to do.
 
     for (const auto &thread_sp: m_threads)
     {
-        if (StateIsRunningState(thread_sp->GetState()))
+        if (StateIsRunningState(thread_sp->GetState())) {
+            if (log)
+                log->Printf("NativeProcessLinux::%s wanted to signal, but thread %" PRIu64 " is still running", __FUNCTION__, thread_sp->GetID());
             return; // Some threads are still running. Don't signal yet.
+        }
     }
 
-    // We have a pending notification and all threads have stopped.
-    Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS | LIBLLDB_LOG_BREAKPOINTS));
+
 
     // Clear any temporary breakpoints we used to implement software single stepping.
     for (const auto &thread_info: m_threads_stepping_with_breakpoint)
@@ -3186,4 +3342,19 @@ NativeProcessLinux::PtraceWrapper(int req, lldb::pid_t pid, void *addr, void *da
     }
 
     return error;
+}
+
+Error
+NativeProcessLinux::GetHSABinaryFileName(std::string& name) {
+    name = m_hsa_debug->GetBinaryFileName();
+    return Error();
+}
+
+
+Error
+NativeProcessLinux::GetHSAThreads(std::vector<lldb::tid_t>& threads) {
+    for (auto t : m_hsa_threads) {
+        threads.push_back(t->GetID());
+    }
+    return Error();
 }

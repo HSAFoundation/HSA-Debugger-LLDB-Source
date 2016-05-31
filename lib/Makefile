@@ -18,7 +18,7 @@ LINK_LIBS_IN_SHARED = 1
 SHARED_LIBRARY = 1
 
 ifeq (,$(findstring -DLLDB_DISABLE_PYTHON,$(CXXFLAGS)))
-PYTHON_CONFIG?=	python-config
+PYTHON_CONFIG?=        python-config
 PYTHON_BUILD_FLAGS = $(shell $(PYTHON_CONFIG) --ldflags)
 endif
 
@@ -78,7 +78,9 @@ USEDLIBS = lldbAPI.a \
 	lldbPluginPlatformGDB.a \
 	lldbPluginProcessElfCore.a \
 	lldbPluginProcessGDBRemote.a \
+	lldbPluginProcessHSA.a \
 	lldbPluginSymbolFileDWARF.a \
+	lldbPluginSymbolFileAMDHSA.a \
 	lldbPluginSymbolFileSymtab.a \
 	lldbPluginSystemRuntimeMacOSX.a \
 	lldbPluginUnwindAssemblyInstEmulation.a \

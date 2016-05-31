@@ -14,6 +14,7 @@
 
 #include "NativeProcessLinux.h"
 #include "NativeRegisterContextLinux.h"
+#include "Plugins/Process/HSA/NativeRegisterContextHSA.h"
 
 #include "lldb/Core/Log.h"
 #include "lldb/Core/State.h"
@@ -161,9 +162,10 @@ NativeThreadLinux::GetRegisterContext ()
         return NativeRegisterContextSP ();
 
     const uint32_t concrete_frame_idx = 0;
+
     m_reg_context_sp.reset (NativeRegisterContextLinux::CreateHostNativeRegisterContextLinux(target_arch,
-                                                                                             *this,
-                                                                                             concrete_frame_idx));
+											     *this,
+											     concrete_frame_idx));
 
     return m_reg_context_sp;
 }
@@ -236,6 +238,23 @@ NativeThreadLinux::SetStepping ()
     m_state = new_state;
 
     m_stop_info.reason = StopReason::eStopReasonNone;
+}
+
+void
+NativeThreadLinux::SetStoppedByHSASignal()
+{
+    Log *log (GetLogIfAllCategoriesSet (LIBLLDB_LOG_THREAD));
+    if (log)
+        log->Printf ("NativeThreadLinux::%s called with signal 0x%02" PRIx32, __FUNCTION__, SIGCHLD);
+
+    const StateType new_state = StateType::eStateStopped;
+    MaybeLogStateChange (new_state);
+    m_state = new_state;
+
+    m_stop_info.reason = StopReason::eStopReasonSignal;
+    m_stop_info.details.signal.signo = SIGCHLD;
+
+    m_stop_description = "New HSA binary";
 }
 
 void

@@ -1097,7 +1097,9 @@ ModuleList::GetSharedModule
             }
             else
             {
-                error.SetErrorStringWithFormat("'%s' does not exist", path);
+
+
+    //                error.SetErrorStringWithFormat("'%s' does not exist", path);
             }
             if (error.Fail())
                 module_sp.reset();

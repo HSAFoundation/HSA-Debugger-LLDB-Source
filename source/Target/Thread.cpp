@@ -51,6 +51,7 @@
 #include "lldb/Target/Unwind.h"
 #include "Plugins/Process/Utility/UnwindLLDB.h"
 #include "Plugins/Process/Utility/UnwindMacOSXFrameBackchain.h"
+#include "Plugins/Process/HSA/ThreadPlanStepOverHSA.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -679,7 +680,7 @@ Thread::SetupForResume ()
         {
             const addr_t thread_pc = reg_ctx_sp->GetPC();
             BreakpointSiteSP bp_site_sp = GetProcess()->GetBreakpointSiteList().FindByAddress(thread_pc);
-            if (bp_site_sp)
+            if (bp_site_sp && !IsHSAThread())
             {
                 // Note, don't assume there's a ThreadPlanStepOverBreakpoint, the target may not require anything
                 // special to step over a breakpoint.
@@ -2171,6 +2172,18 @@ Thread::GetStatus (Stream &strm, uint32_t start_frame, uint32_t num_frames, uint
         if (process->GetThreadList().GetSelectedThread().get() == this)
             is_selected = true;
     }
+
+    auto& thread_list = process->GetThreadList();
+    auto id = GetID();    
+    ThreadSP thread = thread_list.FindThreadByID(id-1, false);
+
+    //Previous thread is handling this
+    if (thread &&
+        (thread->GetSelectedFrame()->GetFrameCodeAddress() == GetSelectedFrame()->GetFrameCodeAddress())) {
+	return 0;
+    }
+
+
     strm.Printf("%c ", is_selected ? '*' : ' ');
     if (target && target->GetDebugger().GetUseExternalEditor())
     {
@@ -2184,8 +2197,50 @@ Thread::GetStatus (Stream &strm, uint32_t start_frame, uint32_t num_frames, uint
             }
         }
     }
-    
-    DumpUsingSettingsFormat (strm, start_frame);
+
+    while (true) {
+	++id;
+	thread = thread_list.FindThreadByID(id);
+	if (!thread || thread->GetSelectedFrame()->GetFrameCodeAddress() != GetSelectedFrame()->GetFrameCodeAddress()) {
+            break;
+	}
+    }
+    --id;
+
+    const FormatEntity::Entry *thread_format = exe_ctx.GetTargetRef().GetDebugger().GetThreadFormat();
+    assert (thread_format);
+
+    StackFrameSP frame_sp;
+    SymbolContext frame_sc;
+    auto frame_idx = start_frame;
+    if (frame_idx != LLDB_INVALID_FRAME_ID)
+    {
+        frame_sp = GetStackFrameAtIndex (frame_idx);
+        if (frame_sp)
+        {
+            exe_ctx.SetFrameSP(frame_sp);
+            frame_sc = frame_sp->GetSymbolContext(eSymbolContextEverything);
+        }
+    }
+
+    for (const auto &child : thread_format->children) {
+	if (child.type == FormatEntity::Entry::Type::ThreadIndexID && id != GetID()) {
+            strm << static_cast<int>(GetIndexID()) << '-' << static_cast<int>(thread_list.FindThreadByID(id)->GetIndexID());
+            auto sel_id = thread_list.GetSelectedThread()->GetIndexID();
+            if (sel_id >= GetIndexID() && sel_id <= thread_list.FindThreadByID(id)->GetIndexID())
+                strm << "(*" << static_cast<int>(thread_list.GetSelectedThread()->GetIndexID()) << ")";
+	} else {
+            FormatEntity::Format (child,
+                                  strm,
+                                  frame_sp ? &frame_sc : NULL,
+                                  &exe_ctx,
+                                  NULL,
+                                  NULL,
+                                  false,
+                                  false);
+	}
+    }
+    //DumpUsingSettingsFormat (strm, start_frame);
     
     if (num_frames > 0)
     {
@@ -2209,6 +2264,8 @@ Thread::GetStatus (Stream &strm, uint32_t start_frame, uint32_t num_frames, uint
             strm.IndentLess();
         strm.IndentLess();
     }
+
+    strm.SetIndentLevel(0);
     return num_frames_shown;
 }
 

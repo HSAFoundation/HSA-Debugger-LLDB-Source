@@ -285,6 +285,10 @@ StringExtractorGDBRemote::GetServerPacketType () const
       case 'G':
         return eServerPacketType_G;
 
+      case 'h':
+        if (PACKET_MATCHES("hsaBin"))                     return eServerPacketType_hsaBin;
+        if (PACKET_MATCHES("hsaThreads"))                 return eServerPacketType_hsaThreads;
+
       case 'H':
         return eServerPacketType_H;
 

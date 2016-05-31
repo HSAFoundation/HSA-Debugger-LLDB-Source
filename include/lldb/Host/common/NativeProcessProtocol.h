@@ -359,6 +359,17 @@ namespace lldb_private
                 MainLoop &mainloop,
                 NativeProcessProtocolSP &process_sp);
 
+        virtual Error
+        GetHSABinaryFileName(std::string& name) {
+            return Error ("not implemented");
+        }
+
+        virtual Error
+        GetHSAThreads(std::vector<lldb::tid_t>& threads) {
+            return Error ("not implemented");
+        }
+
+
     protected:
         lldb::pid_t m_pid;
 

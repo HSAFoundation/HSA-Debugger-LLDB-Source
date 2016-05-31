@@ -23,12 +23,14 @@
 #include "lldb/Target/MemoryRegionInfo.h"
 
 #include "lldb/Host/common/NativeProcessProtocol.h"
+#include "Plugins/LanguageRuntime/HSA/HSARuntime/NativeHSADebug.h"
 #include "NativeThreadLinux.h"
 
 namespace lldb_private {
     class Error;
     class Module;
     class Scalar;
+    class NativeThreadHSA;
 
 namespace process_linux {
     /// @class NativeProcessLinux
@@ -113,6 +115,12 @@ namespace process_linux {
         Error
         GetFileLoadAddress(const llvm::StringRef& file_name, lldb::addr_t& load_addr) override;
 
+        Error
+        GetHSABinaryFileName(std::string& name) override;
+
+        Error
+        GetHSAThreads(std::vector<lldb::tid_t>& threads) override;
+
         NativeThreadLinuxSP
         GetThreadByID(lldb::tid_t id);
 
@@ -148,6 +156,9 @@ namespace process_linux {
         // List of thread ids stepping with a breakpoint with the address of
         // the relevan breakpoint
         std::map<lldb::tid_t, lldb::addr_t> m_threads_stepping_with_breakpoint;
+
+        NativeHSADebugUP m_hsa_debug;
+        std::vector<std::shared_ptr<NativeThreadHSA>> m_hsa_threads;
 
         /// @class LauchArgs
         ///
@@ -271,6 +282,15 @@ namespace process_linux {
         Error
         GetSoftwareBreakpointPCOffset(uint32_t &actual_opcode_size);
 
+        //TODO improve
+        bool
+        IsHSAAddress (lldb::addr_t addr) {
+            return addr < 0x1000;
+        }
+
+        Error
+        SetHSABreakpoint (lldb::addr_t addr, uint32_t size, bool momentary);
+
         Error
         FixupBreakpointPCAsNeeded(NativeThreadLinux &thread);
 
@@ -315,6 +335,8 @@ namespace process_linux {
         // operation (continue, single-step) depends on the state parameter.
         Error
         ResumeThread(NativeThreadLinux &thread, lldb::StateType state, int signo);
+        Error
+        ResumeHSAThread(NativeThreadHSA &thread, lldb::StateType state, int signo);
 
         void
         ThreadWasCreated(NativeThreadLinux &thread);

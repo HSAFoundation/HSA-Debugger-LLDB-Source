@@ -428,6 +428,7 @@ namespace lldb {
         // assume these can be used as indexes into array g_languages.
         eLanguageTypeMipsAssembler   = 0x0024,   ///< Mips_Assembler.
         eLanguageTypeExtRenderScript = 0x0025,   ///< RenderScript.
+        eLanguageTypeExtHsail        = 0x0026,   ///< HSAIL.
         eNumLanguageTypes
     };
     

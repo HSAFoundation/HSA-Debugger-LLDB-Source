@@ -4603,3 +4603,39 @@ GDBRemoteCommunicationClient::ServeSymbolLookups(lldb_private::Process *process)
     }
 }
 
+std::string
+GDBRemoteCommunicationClient::GetHSABinaryFileName() {
+    StringExtractorGDBRemote response;
+    if (SendPacketAndWaitForResponse("hsaBin", response, false) == PacketResult::Success)
+    {
+        Error error;
+        (void)ParseHostIOPacketResponse (response, UINT64_MAX, error);
+        return response.GetStringRef();
+    }
+    
+    return "";
+}
+
+std::vector<lldb::tid_t>
+GDBRemoteCommunicationClient::GetHSAThreads() {
+    StringExtractorGDBRemote response;
+    if (SendPacketAndWaitForResponse("hsaThreads", response, false) == PacketResult::Success)
+    {
+        Error error;
+        (void)ParseHostIOPacketResponse (response, UINT64_MAX, error);
+        std::vector<lldb::tid_t> threads;
+
+        auto n = response.GetHexMaxU64(false, 0);
+        if (n > 0) {
+            for (unsigned i = 0; i < n-1; ++i) {
+                threads.push_back(response.GetHexMaxU64(false, 0));
+                (void)response.GetChar();
+            }
+
+            threads.push_back(response.GetHexMaxU64(false, 0));
+        }
+        return threads;
+    }
+    
+    return {};
+}

@@ -20,6 +20,8 @@
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Thread.h"
 
+#include "Plugins/Process/HSA/UnwindHSA.h"
+
 class StringExtractor;
 
 namespace lldb_private {
@@ -117,6 +119,14 @@ public:
 
     StructuredData::ObjectSP
     FetchThreadExtendedInfo () override;
+
+    Unwind *
+    GetUnwinder () override { 
+        if (m_unwinder_ap)
+            return m_unwinder_ap.get();
+        
+        return Thread::GetUnwinder();
+    }
 
 protected:
     friend class ProcessGDBRemote;

@@ -15,6 +15,7 @@ set( LLDB_USED_LIBS
   # Plugins
   lldbPluginDisassemblerLLVM
   lldbPluginSymbolFileDWARF
+  lldbPluginSymbolFileAMDHSA
   lldbPluginSymbolFileSymtab
   lldbPluginDynamicLoaderStatic
   lldbPluginDynamicLoaderPosixDYLD
@@ -32,6 +33,7 @@ set( LLDB_USED_LIBS
   lldbPluginObjectContainerBSDArchive
   lldbPluginObjectContainerMachOArchive
   lldbPluginProcessGDBRemote
+  lldbPluginProcessHSA
   lldbPluginProcessUtility
   lldbPluginPlatformAndroid
   lldbPluginPlatformGDB
@@ -49,6 +51,7 @@ set( LLDB_USED_LIBS
   lldbPluginUnwindAssemblyX86
   lldbPluginAppleObjCRuntime
   lldbPluginRenderScriptRuntime
+  lldbPluginHSARuntime
   lldbPluginLanguageRuntimeGo
   lldbPluginCXXItaniumABI
   lldbPluginABIMacOSX_arm
@@ -161,7 +164,12 @@ if (NOT LLDB_DISABLE_PYTHON AND NOT LLVM_BUILD_STATIC)
   list(APPEND LLDB_SYSTEM_LIBS ${PYTHON_LIBRARIES})
 endif()
 
-list(APPEND LLDB_SYSTEM_LIBS ${system_libs})
+find_library(hwdbg_facilities_lib AMDHwDbgFacilities-x64)
+if (NOT hwdbg_facilities_lib) 
+  message (FATAL_ERROR "Did not find libAMDHwDbgFacilities-x64.so. You may need to add the path to the containing directory to CMAKE_PREFIX_PATH")
+endif()
+
+list(APPEND LLDB_SYSTEM_LIBS ${system_libs} ${hwdbg_facilities_lib})
 
 if (LLVM_BUILD_STATIC)
   if (NOT LLDB_DISABLE_PYTHON)

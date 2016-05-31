@@ -262,6 +262,7 @@ public:
 
 protected:
     friend class ThreadGDBRemote;
+    friend class ThreadGDBRemoteHSA;
     friend class GDBRemoteCommunicationClient;
     friend class GDBRemoteRegisterContext;
 
@@ -281,6 +282,7 @@ protected:
     std::vector<StringExtractorGDBRemote> m_stop_packet_stack;  // The stop packet stack replaces the last stop packet variable
     Mutex m_last_stop_packet_mutex;
     GDBRemoteDynamicRegisterInfo m_register_info;
+    GDBRemoteDynamicRegisterInfo m_hsa_register_info;
     Broadcaster m_async_broadcaster;
     Listener m_async_listener;
     HostThread m_async_thread;

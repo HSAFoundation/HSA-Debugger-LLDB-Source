@@ -2800,8 +2800,9 @@ protected:
                                 module_spec.GetUUID() = m_uuid_option_group.GetOptionValue ().GetCurrentValue();
                             if (m_symbol_file.GetOptionValue().OptionWasSet())
                                 module_spec.GetSymbolFileSpec() = m_symbol_file.GetOptionValue().GetCurrentValue();
-                            if (!module_spec.GetArchitecture().IsValid())
-                                module_spec.GetArchitecture() = target->GetArchitecture();
+                            // HSA requires images of different arch
+			    // if (!module_spec.GetArchitecture().IsValid())
+			    //     module_spec.GetArchitecture() = target->GetArchitecture();
                             Error error;
                             ModuleSP module_sp (target->GetSharedModule (module_spec, &error));
                             if (!module_sp)

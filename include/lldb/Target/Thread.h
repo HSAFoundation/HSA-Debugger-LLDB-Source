@@ -1373,6 +1373,13 @@ public:
         return LLDB_INVALID_ADDRESS;
     }
 
+
+    virtual bool 
+    IsHSAThread() const
+    {
+        return false;
+    }
+
 protected:
     friend class ThreadPlan;
     friend class ThreadList;

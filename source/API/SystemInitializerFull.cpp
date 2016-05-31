@@ -53,11 +53,13 @@
 #include "Plugins/LanguageRuntime/ObjC/AppleObjCRuntime/AppleObjCRuntimeV2.h"
 #include "Plugins/LanguageRuntime/Go/GoLanguageRuntime.h"
 #include "Plugins/LanguageRuntime/RenderScript/RenderScriptRuntime/RenderScriptRuntime.h"
+#include "Plugins/LanguageRuntime/HSA/HSARuntime/HSARuntime.h"
 #include "Plugins/MemoryHistory/asan/MemoryHistoryASan.h"
 #include "Plugins/Platform/gdb-server/PlatformRemoteGDBServer.h"
 #include "Plugins/Process/elf-core/ProcessElfCore.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemote.h"
 #include "Plugins/ScriptInterpreter/None/ScriptInterpreterNone.h"
+#include "Plugins/SymbolFile/AMDHSA/SymbolFileAMDHSA.h"
 #include "Plugins/SymbolFile/DWARF/SymbolFileDWARF.h"
 #include "Plugins/SymbolFile/DWARF/SymbolFileDWARFDebugMap.h"
 #include "Plugins/SymbolFile/Symtab/SymbolFileSymtab.h"
@@ -296,6 +298,7 @@ SystemInitializerFull::Initialize()
     AddressSanitizerRuntime::Initialize();
 
     SymbolVendorELF::Initialize();
+    SymbolFileAMDHSA::Initialize();
     SymbolFileDWARF::Initialize();
     SymbolFileSymtab::Initialize();
     UnwindAssemblyInstEmulation::Initialize();
@@ -307,6 +310,7 @@ SystemInitializerFull::Initialize()
     AppleObjCRuntimeV1::Initialize();
     SystemRuntimeMacOSX::Initialize();
     RenderScriptRuntime::Initialize();
+    HSARuntime::Initialize();
     GoLanguageRuntime::Initialize();
 
     CPlusPlusLanguage::Initialize();

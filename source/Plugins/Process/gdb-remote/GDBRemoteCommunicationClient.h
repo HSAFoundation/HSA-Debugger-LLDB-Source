@@ -572,6 +572,12 @@ public:
     void
     ServeSymbolLookups(lldb_private::Process *process);
 
+    std::string
+    GetHSABinaryFileName();
+    
+    std::vector<lldb::tid_t>
+    GetHSAThreads();
+
 protected:
     LazyBool m_supports_not_sending_acks;
     LazyBool m_supports_thread_suffix;

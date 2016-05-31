@@ -193,6 +193,12 @@ protected:
     Handle_P (StringExtractorGDBRemote &packet);
 
     PacketResult
+    Handle_hsaBin (StringExtractorGDBRemote &packet);
+
+    PacketResult
+    Handle_hsaThreads (StringExtractorGDBRemote &packet);
+
+    PacketResult
     Handle_H (StringExtractorGDBRemote &packet);
 
     PacketResult

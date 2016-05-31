@@ -1,0 +1,20 @@
+These files implement a HSA Agent to work with hsail-gdb
+
+The libAMDHSADebugAgent-x64.so is built and injected into the running application by the HSA runtime.
+The location and filename for HSADebugAgent.so is passed using a known environment variable.
+
+Build the agent library with HwDbg DBE. For now we use DBE 1.0 
+
+Once you have compiled the agent library,  
+if you are using the real HSA-DBE, dont forget to add the DBE path your LD_LIBARY_PATH 
+since it is a dynamic library
+
+
+The Agent can only be used when the application is run within hsail-gdb
+The hsailConfigure in the Gdbinit file sets the appropriate environment variables
+
+GDBInit:
+The contents of the gdbinit file located within the Agent directory should be appended to the .gdbinit to your home directory
+Once you start gdb, you should run: hsailconfigure.
+
+The command hsailconfigure can be added within the init file to always set up gdb for hsail.

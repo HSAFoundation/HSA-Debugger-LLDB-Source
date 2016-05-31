@@ -21,6 +21,11 @@ include_directories(
   )
 endif ()
 
+include_directories(
+  ../../source/Plugins/LanguageRuntime/HSA
+  )
+
+
 include_directories(../../source)
 
 include(../../cmake/LLDBDependencies.cmake)

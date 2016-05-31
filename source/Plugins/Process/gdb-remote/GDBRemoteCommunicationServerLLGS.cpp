@@ -107,6 +107,10 @@ GDBRemoteCommunicationServerLLGS::RegisterPacketHandlers()
                                   &GDBRemoteCommunicationServerLLGS::Handle_c);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_D,
                                   &GDBRemoteCommunicationServerLLGS::Handle_D);
+    RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_hsaBin,
+                                  &GDBRemoteCommunicationServerLLGS::Handle_hsaBin);
+    RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_hsaThreads,
+                                  &GDBRemoteCommunicationServerLLGS::Handle_hsaThreads);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_H,
                                   &GDBRemoteCommunicationServerLLGS::Handle_H);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_I,
@@ -283,10 +287,12 @@ GDBRemoteCommunicationServerLLGS::AttachToProcess (lldb::pid_t pid)
     if (m_debugged_process_sp  && m_debugged_process_sp->GetID() != LLDB_INVALID_PROCESS_ID)
         return Error("cannot attach to a process %" PRIu64 " when another process with pid %" PRIu64 " is being debugged.", pid, m_debugged_process_sp->GetID());
 
+
     // Try to attach.
     error = NativeProcessProtocol::Attach(pid, *this, m_mainloop, m_debugged_process_sp);
     if (!error.Success ())
     {
+
         fprintf (stderr, "%s: failed to attach to process %" PRIu64 ": %s", __FUNCTION__, pid, error.AsCString ());
         return error;
     }
@@ -432,6 +438,7 @@ GetRegistersAsJSON(NativeThreadProtocol &thread, bool abridged)
     Log *log (GetLogIfAnyCategoriesSet (LIBLLDB_LOG_THREAD));
 
     NativeRegisterContextSP reg_ctx_sp = thread.GetRegisterContext ();
+
     if (! reg_ctx_sp)
         return nullptr;
 
@@ -440,6 +447,7 @@ GetRegistersAsJSON(NativeThreadProtocol &thread, bool abridged)
 #ifdef LLDB_JTHREADSINFO_FULL_REGISTER_SET
     // Expedite all registers in the first register set (i.e. should be GPRs) that are not contained in other registers.
     const RegisterSet *reg_set_p = reg_ctx_sp->GetRegisterSet(0);
+
     if (! reg_set_p)
         return nullptr;
     for (const uint32_t *reg_num_p = reg_set_p->registers; *reg_num_p != LLDB_INVALID_REGNUM; ++reg_num_p)
@@ -537,7 +545,6 @@ GetJSONThreadsInfo(NativeProcessProtocol &process, bool abridged)
           (thread_sp = process.GetThreadAtIndex(thread_idx)) != nullptr;
           ++thread_idx)
     {
-
         lldb::tid_t tid = thread_sp->GetID();
 
         // Grab the reason this thread stopped.
@@ -591,7 +598,6 @@ GetJSONThreadsInfo(NativeProcessProtocol &process, bool abridged)
             }
             thread_obj_sp->SetObject("medata", medata_array_sp);
         }
-
         // TODO: Expedite interesting regions of inferior memory
     }
 
@@ -707,6 +713,7 @@ GDBRemoteCommunicationServerLLGS::SendStopReplyPacketForThread (lldb::tid_t tid)
             {
                 response.PutCString("jstopinfo:");
                 StreamString unescaped_response;
+
                 threads_info_sp->Write(unescaped_response);
                 response.PutCStringAsRawHex8(unescaped_response.GetData());
                 response.PutChar(';');
@@ -721,7 +728,6 @@ GDBRemoteCommunicationServerLLGS::SendStopReplyPacketForThread (lldb::tid_t tid)
     //
     // Expedite registers.
     //
-
     // Grab the register context.
     NativeRegisterContextSP reg_ctx_sp = thread_sp->GetRegisterContext ();
     if (reg_ctx_sp)
@@ -1848,6 +1854,72 @@ GDBRemoteCommunicationServerLLGS::Handle_P (StringExtractorGDBRemote &packet)
     }
 
     return SendOKResponse();
+}
+
+GDBRemoteCommunication::PacketResult
+GDBRemoteCommunicationServerLLGS::Handle_hsaBin (StringExtractorGDBRemote &packet)
+{
+    Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_THREAD));
+
+    if (log)
+        log->Printf ("GDBRemoteCommunicationServerLLGS::%s handling hsabin", __FUNCTION__);
+
+
+    // Fail if we don't have a current process.
+    if (!m_debugged_process_sp || (m_debugged_process_sp->GetID () == LLDB_INVALID_PROCESS_ID))
+    {
+        if (log)
+            log->Printf ("GDBRemoteCommunicationServerLLGS::%s failed, no process available", __FUNCTION__);
+        return SendErrorResponse (0x15);
+    }
+
+    StreamGDBRemote response;
+    std::string file_name;
+    auto err = m_debugged_process_sp->GetHSABinaryFileName(file_name);
+    if (log)
+        log->Printf ("GDBRemoteCommunicationServerLLGS::%s file name is %s", __FUNCTION__, file_name.c_str());
+
+    if (err.Success()) {
+        response.PutCString(file_name.data());
+        return SendPacketNoLock(response.GetData(), response.GetSize());
+    }
+    return SendErrorResponse (0x0);
+}
+
+GDBRemoteCommunication::PacketResult
+GDBRemoteCommunicationServerLLGS::Handle_hsaThreads (StringExtractorGDBRemote &packet)
+{
+    Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_THREAD));
+
+    if (log)
+        log->Printf ("GDBRemoteCommunicationServerLLGS::%s handling hsaThreads", __FUNCTION__);
+
+
+    // Fail if we don't have a current process.
+    if (!m_debugged_process_sp || (m_debugged_process_sp->GetID () == LLDB_INVALID_PROCESS_ID))
+    {
+        if (log)
+            log->Printf ("GDBRemoteCommunicationServerLLGS::%s failed, no process available", __FUNCTION__);
+        return SendErrorResponse (0x15);
+    }
+
+    StreamGDBRemote response;
+    std::vector<lldb::tid_t> threads;
+    auto err = m_debugged_process_sp->GetHSAThreads(threads);
+
+    response.PutHex64(threads.size());
+    response.PutChar(';');
+        
+    if (!threads.empty()) {
+        for (unsigned i = 0; i < threads.size()-1; ++i) {
+            response.PutHex64(threads[i]);
+            response.PutChar(',');
+        }
+
+        response.PutHex64(threads[threads.size()-1]);
+    }
+
+    return SendPacketNoLock(response.GetData(), response.GetSize());
 }
 
 GDBRemoteCommunication::PacketResult

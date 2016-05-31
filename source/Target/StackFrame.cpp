@@ -29,6 +29,7 @@
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
+#include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 
@@ -406,6 +407,25 @@ StackFrame::GetSymbolContext (uint32_t resolve_scope)
                     else
                     {
                     lookup_addr.SetOffset(offset - 1);
+                    }
+                }
+            }
+        }
+
+        //Probably HSA, set to the HSA module
+        if (!m_sc.module_sp) 
+        {
+            if (m_sc.target_sp) {
+                auto& images = m_sc.target_sp->GetImages();
+
+                for (unsigned i=0; i < images.GetSize(); ++i) {
+                    auto module_sp = images.GetModuleAtIndex(i);
+                    if (module_sp) {
+                        if (module_sp->GetArchitecture().GetMachine() == llvm::Triple::hsail) {
+                            m_sc.module_sp = module_sp;
+                            m_flags.Set(eSymbolContextModule); 
+                            break;
+                        }
                     }
                 }
             }

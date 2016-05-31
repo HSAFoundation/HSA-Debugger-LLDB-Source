@@ -1352,7 +1352,7 @@ GDBRemoteCommunication::StartDebugserverProcess (const char *url,
         launch_info.AppendSuppressFileAction (STDIN_FILENO, true, false);
         launch_info.AppendSuppressFileAction (STDOUT_FILENO, false, true);
         launch_info.AppendSuppressFileAction (STDERR_FILENO, false, true);
-        
+
         error = Host::LaunchProcess(launch_info);
         
         if (error.Success() &&

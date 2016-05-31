@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <map>
 #include <mutex>
+#include <fstream>
 
 #include "lldb/Breakpoint/Watchpoint.h"
 #include "lldb/Interpreter/Args.h"
@@ -76,6 +77,11 @@
 #include "ProcessGDBRemote.h"
 #include "ProcessGDBRemoteLog.h"
 #include "ThreadGDBRemote.h"
+#include "ThreadGDBRemoteHSA.h"
+
+#define DECLARE_REGISTER_INFOS_HSA_STRUCT
+#include "Plugins/Process/HSA/RegisterInfosHSA.h"
+#undef DECLARE_REGISTER_INFOS_HSA_STRUCT
 
 #define DEBUGSERVER_BASENAME    "debugserver"
 using namespace lldb;
@@ -236,6 +242,9 @@ ProcessGDBRemote::CanDebug (lldb::TargetSP target_sp, bool plugin_specified_by_n
 {
     if (plugin_specified_by_name)
         return true;
+
+    if (target_sp->GetArchitecture().GetMachine() == llvm::Triple::hsail)
+      return true;
 
     // For now we are just making sure the file exists for a given module
     Module *exe_module = target_sp->GetExecutableModulePointer();
@@ -461,6 +470,17 @@ SplitCommaSeparatedRegisterNumberString(const llvm::StringRef &comma_separated_r
 void
 ProcessGDBRemote::BuildDynamicRegisterInfo (bool force)
 {
+    if (force || m_hsa_register_info.GetNumRegisters() == 0) {
+        ConstString pc ("pc");
+        ConstString fp ("fp");
+        ConstString mp ("mp");
+        ConstString gpr ("gpr");
+        m_hsa_register_info.AddRegister(g_register_infos_hsa[0], pc, pc, gpr);
+        m_hsa_register_info.AddRegister(g_register_infos_hsa[1], fp, fp, gpr);
+        m_hsa_register_info.AddRegister(g_register_infos_hsa[2], mp, mp, gpr);
+        m_hsa_register_info.Finalize(GetTarget().GetArchitecture());
+    }
+
     if (!force && m_register_info.GetNumRegisters() > 0)
         return;
 
@@ -1797,6 +1817,8 @@ ProcessGDBRemote::UpdateThreadList (ThreadList &old_thread_list, ThreadList &new
         num_thread_ids = m_thread_ids.size();
     }
 
+    auto hsa_threads = m_gdb_comm.GetHSAThreads();
+
     ThreadList old_thread_list_copy(old_thread_list);
     if (num_thread_ids > 0)
     {
@@ -1806,7 +1828,12 @@ ProcessGDBRemote::UpdateThreadList (ThreadList &old_thread_list, ThreadList &new
             ThreadSP thread_sp (old_thread_list_copy.RemoveThreadByProtocolID(tid, false));
             if (!thread_sp)
             {
-                thread_sp.reset (new ThreadGDBRemote (*this, tid));
+                if (std::find(hsa_threads.begin(), hsa_threads.end(), tid) != hsa_threads.end())
+                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
+                else
+                    thread_sp.reset (new ThreadGDBRemote (*this, tid));
+
+
                 if (log && log->GetMask().Test(GDBR_LOG_VERBOSE))
                     log->Printf(
                             "ProcessGDBRemote::%s Making new thread: %p for thread ID: 0x%" PRIx64 ".\n",
@@ -1950,13 +1977,26 @@ ProcessGDBRemote::SetThreadStopInfo (lldb::tid_t tid,
             if (!thread_sp)
             {
                 // Create the thread if we need to
-                thread_sp.reset (new ThreadGDBRemote (*this, tid));
+                // TODO fix HSA hack
+                if (thread_name == "HSA Wavefront") {
+                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
+                }
+                else
+                {
+                    thread_sp.reset (new ThreadGDBRemote (*this, tid));
+                }
                 m_thread_list_real.AddThread(thread_sp);
             }
         }
 
         if (thread_sp)
         {
+            if (thread_name == "HSA Wavefront" && !thread_sp->IsHSAThread()) {
+                m_thread_list.RemoveThreadByID(tid, false);
+                thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
+                m_thread_list.AddThread(thread_sp);
+            }
+
             ThreadGDBRemote *gdb_thread = static_cast<ThreadGDBRemote *> (thread_sp.get());
             gdb_thread->GetRegisterContext()->InvalidateIfNeeded(true);
 
@@ -2599,6 +2639,25 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                 {
                     tid = m_thread_ids.front ();
                 }
+            }
+
+            if (!description.empty()) {
+                auto file_name =  m_gdb_comm.GetHSABinaryFileName();
+                FileSpec fs (file_name,true);
+                Error err;
+
+                auto file_size = m_gdb_comm.GetFileSize(fs);
+                auto fd = m_gdb_comm.OpenFile(fs, O_RDONLY, 0, err);
+                std::vector<char> binary (file_size);
+                (void)m_gdb_comm.ReadFile(fd, 0, binary.data(), binary.size(), err);
+                m_gdb_comm.CloseFile(fd, err);
+
+                {
+                    std::ofstream bin_file (file_name);
+                    for (size_t i=0; i<binary.size(); ++i) bin_file << binary[i];
+                }
+
+                GetTarget().GetSharedModule(ModuleSpec(fs));
             }
 
             ThreadSP thread_sp = SetThreadStopInfo (tid,
@@ -3898,9 +3957,11 @@ ProcessGDBRemote::AsyncThread (void *arg)
                                     case eStateStopped:
                                     case eStateCrashed:
                                     case eStateSuspended:
+                                    {
                                         process->SetLastStopPacket (response);
                                         process->SetPrivateState (stop_state);
                                         break;
+                                    }
 
                                     case eStateExited:
                                     {

@@ -166,6 +166,8 @@ public:
         eCore_kalimba4,
         eCore_kalimba5,
 
+	eCore_amdgpu,
+
         kNumCores,
 
         kCore_invalid,

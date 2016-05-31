@@ -672,6 +672,8 @@ ObjectFileELF::GetModuleSpecifications (const lldb_private::FileSpec& file,
                                         lldb_private::ModuleSpecList &specs)
 {
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_MODULES));
+    if (log)
+      log->Printf ("ObjectFileELF::%s YO", __FUNCTION__);
 
     const size_t initial_count = specs.GetSize();
 

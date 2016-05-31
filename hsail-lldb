@@ -1,0 +1,145 @@
+#!/bin/bash
+
+
+# **************************************************************************************************/
+#   HSAIL-LLDB Driver script
+#
+#   Copyright (c) 2015 ADVANCED MICRO DEVICES, INC.  All rights reserved.
+#   This file includes code originally published under
+#
+#   Copyright (C) 1986-2014 Free Software Foundation, Inc.
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+# ****************************************************************************************************
+
+# A wrapper script to check for the environment and call lldb.
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    TARGET="$( readlink "$SOURCE" )"
+    if [[ $SOURCE == /* ]]; then
+        SOURCE="$TARGET"
+    else
+        DIR="$( dirname "$SOURCE" )"
+        SOURCE="$DIR/$TARGET"
+    fi
+done
+REALPATH="$( dirname "$SOURCE" )"
+
+export LD_LIBRARY_PATH=/dummy/AMDGPUKernelDebugSDK-v0.6/lib/x86_64:${LD_LIBRARY_PATH}
+
+
+# lldb arguments
+LLDB_ARGS=$*
+
+# Get the full path to the script
+SOURCE="${BASH_SOURCE[0]}"
+ROOTDIR="$( dirname "$SOURCE" )"
+# If any part of the path is a symbolic link
+# replace it with the full path
+while [ -h "$SOURCE" ]; do
+    TARGET="$( readlink "$SOURCE" )"
+    if [[ $SOURCE == /* ]]; then
+        SOURCE="$TARGET"
+    else
+        DIR="$( dirname "$SOURCE" )"
+        SOURCE="$DIR/$TARGET"
+    fi
+    if [[ $SOURCE == \.* ]]; then
+        SOURCE="$ROOTDIR/$SOURCE"
+    fi
+done
+REALPATH="$( dirname "$SOURCE" )"
+
+# Enable SoftCP mode in the HSA runtime
+export HSA_EMULATE_AQL=1
+export HSA_TOOLS_LIB="libhsa-runtime-tools64.so.1 libAMDHSADebugAgent-x64.so"
+
+if ! ls $REALPATH/lldb; then
+	echo lldb executable not found in folder $REALPATH
+	exit -1
+fi
+
+# These flags will be used by libhsail
+export LIBHSAIL_OPTIONS_APPEND="-g -include-source"
+# This flag will be used by runtime to process the debug info when the brig module is added to create a program
+export PROGRAM_CREATE_OPTIONS_APPEND="-g"
+
+# Set and export the LD_LIBRARY_PATH for AMDGPUKernelDebugSDK
+# This assumes a specific directory structure with AMDHsailGdb and AMDGPUKernelDebugSDK folders are in the same directory
+SDK="AMDGPUKernelDebugSDK-v0.6"
+# If the user has specified the SDK path already, use that
+# otherwise look for the SDK folder relative to the hsail-gdb folder
+if [[ ! "$LD_LIBRARY_PATH" == *$SDK* ]]; then
+    for fileName in $( ls $REALPATH/../../.. ); do
+        if [[ "$fileName" == *$SDK* ]]; then
+            if [[ ! "$fileName" == *tar* ]]; then
+                export LD_LIBRARY_PATH=$REALPATH/../../../$fileName/lib/x86_64:${LD_LIBRARY_PATH}
+            fi
+        fi
+    done
+    if [[ ! "$LD_LIBRARY_PATH" == *$SDK* ]]; then
+        echo The $SDK folder cannot be found.  Please use the directory structure shown in the README and make sure the $SDK folder is specified in the LD_LIBRARY_PATH environment variable.
+        exit -1
+    fi
+fi
+
+# Remove any stale FIFO files
+if [ -p fifo-agent-w-gdb-r ]; then
+    rm -f fifo-agent-w-gdb-r
+fi
+if [ -p fifo-gdb-w-agent-r ]; then
+    rm -f fifo-gdb-w-agent-r
+fi
+
+# Define a session ID, if logging is enabled by the user
+if [ -z "$HSAIL_GDB_ENABLE_LOG" ]; then
+	export HSAIL_GDB_DEBUG_SESSION_ID=""
+else
+	export HSAIL_GDB_DEBUG_SESSION_ID=$$
+fi
+
+# We can now call lldb
+export ENABLE_HSAIL_LLDB=1
+
+$REALPATH/lldb $LLDB_ARGS
+
+# Steps to run after lldb exits
+unset ENABLE_HSAIL_GDB
+
+# If the HSAIL loggging variable was not defined, remove the gdb log
+# else save it with the session id
+if [ -z "$HSAIL_GDB_ENABLE_LOG" ]; then
+	rm -f gdb.txt 
+else
+	GDBLOGFILENAME=$HSAIL_GDB_ENABLE_LOG"_hsail_gdb_log_"$HSAIL_GDB_DEBUG_SESSION_ID
+
+	echo "GDB Log saved to " $GDBLOGFILENAME
+	mv gdb.txt $GDBLOGFILENAME 2> /dev/null
+fi
+
+if [ -p fifo-agent-w-gdb-r ]; then
+    rm -f fifo-agent-w-gdb-r
+fi
+if [ -p fifo-gdb-w-agent-r ]; then
+    rm -f fifo-gdb-w-agent-r
+fi
+
+# Done in case lldb didnt exit cleanly
+
+ipcrm -M 5678 2> /dev/null
+ipcrm -M 1234 2> /dev/null
+ipcrm -M 2222 2> /dev/null
+ipcrm -M 1111 2> /dev/null
+

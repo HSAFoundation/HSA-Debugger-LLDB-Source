@@ -149,7 +149,9 @@ static const CoreDefinition g_core_definitions[] =
 
     { eByteOrderBig   , 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba3  , "kalimba3" },
     { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba4  , "kalimba4" },
-    { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba5  , "kalimba5" }
+    { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba5  , "kalimba5" },
+
+    { eByteOrderLittle, 8, 1, 1 , llvm::Triple::hsail , ArchSpec::eCore_amdgpu  , "amdgpu" }
 };
 
 // Ensure that we have an entry in the g_core_definitions for each core. If you comment out an entry above,
@@ -305,7 +307,8 @@ static const ArchDefinitionEntry g_elf_arch_entries[] =
     { ArchSpec::eCore_hexagon_generic , llvm::ELF::EM_HEXAGON, LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // HEXAGON
     { ArchSpec::eCore_kalimba3 ,        llvm::ELF::EM_CSR_KALIMBA, llvm::Triple::KalimbaSubArch_v3, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA
     { ArchSpec::eCore_kalimba4 ,        llvm::ELF::EM_CSR_KALIMBA, llvm::Triple::KalimbaSubArch_v4, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA
-    { ArchSpec::eCore_kalimba5 ,        llvm::ELF::EM_CSR_KALIMBA, llvm::Triple::KalimbaSubArch_v5, 0xFFFFFFFFu, 0xFFFFFFFFu }  // KALIMBA
+    { ArchSpec::eCore_kalimba5 ,        llvm::ELF::EM_CSR_KALIMBA, llvm::Triple::KalimbaSubArch_v5, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA,
+    { ArchSpec::eCore_amdgpu ,        llvm::ELF::EM_AMDGPU, LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }  // hsail
 };
 
 static const ArchDefinition g_elf_arch_def = {

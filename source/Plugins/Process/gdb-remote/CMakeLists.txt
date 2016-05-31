@@ -13,4 +13,5 @@ add_lldb_library(lldbPluginProcessGDBRemote
   ProcessGDBRemote.cpp
   ProcessGDBRemoteLog.cpp
   ThreadGDBRemote.cpp
+  ThreadGDBRemoteHSA.cpp
   )

@@ -394,6 +394,7 @@ TargetList::CreateTargetInternal (Debugger &debugger,
 
     ArchSpec arch(specified_arch);
 
+
     if (arch.IsValid())
     {
         if (!platform_sp || !platform_sp->IsCompatibleArchitecture(arch, false, nullptr))

@@ -481,7 +481,8 @@ DWARFFormValue::Address() const
         return Unsigned();
 
     assert(m_cu);
-    assert(m_form == DW_FORM_GNU_addr_index);
+    //AMDHSA hack
+    //assert(m_form == DW_FORM_GNU_addr_index);
 
     if (!symbol_file)
         return 0;
