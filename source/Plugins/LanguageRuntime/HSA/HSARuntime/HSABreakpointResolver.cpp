@@ -1,4 +1,4 @@
-#include <iostream>//===-- HSABreakpointResolver.cpp -------------------------------*- C++ -*-===//
+//===-- HSABreakpointResolver.cpp -------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,8 +11,11 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/DataExtractor.h"
 #include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Symbol/SymbolVendor.h"
+#include "lldb/Symbol/SymbolFile.h"
 #include "HSABreakpointResolver.h"
 #include "Plugins/SymbolFile/AMDHSA/FacilitiesInterface.h"
+#include "Plugins/SymbolFile/AMDHSA/SymbolFileAMDHSA.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -40,16 +43,24 @@ HSABreakpointResolver::SearchCallback(SearchFilter &filter,
     return Searcher::eCallbackReturnContinue;
   }
 
-  DataExtractor de;
-  obj_file->GetData(0,obj_file->GetByteSize(),de);
-	
   HwDbgInfo_err err;
 
-  //TODO use the symbol file instead
-  auto dbginfo = hwdbginfo_init_with_hsa_1_0_binary((void*)de.GetDataStart(), obj_file->GetByteSize(), &err);
+  auto sym_vendor = module_sp->GetSymbolVendor();
+  if (!sym_vendor) 
+      return Searcher::eCallbackReturnContinue;    
 
-  if (m_type == Type::KernelEntry || m_type == Type::AllKernels) {
-      err = hwdbginfo_all_mapped_addrs(dbginfo, max_addrs, addrs.data(), &n_addrs);
+  auto sym_file = sym_vendor->GetSymbolFile();
+  if (!sym_file)
+      return Searcher::eCallbackReturnContinue;    
+
+  auto dbginfo = static_cast<SymbolFileAMDHSA*>(sym_file)->GetDbgInfo();
+
+  if (m_type == Type::KernelEntry) {
+       err = hwdbginfo_all_mapped_addrs(dbginfo, max_addrs, addrs.data(), &n_addrs);
+
+      if (err != HWDBGINFO_E_SUCCESS) {
+          return Searcher::eCallbackReturnContinue;
+      } 
   } 
   else {
       auto loc = hwdbginfo_make_code_location(nullptr, m_line);
@@ -65,18 +76,19 @@ HSABreakpointResolver::SearchCallback(SearchFilter &filter,
           return Searcher::eCallbackReturnContinue;
       }
 
-      err = hwdbginfo_line_to_addrs(dbginfo, resolvedLoc, max_addrs, addrs.data(), nullptr);
+      err = hwdbginfo_line_to_addrs(dbginfo, resolvedLoc, max_addrs, addrs.data(), &n_addrs);
+
+      if (err != HWDBGINFO_E_SUCCESS) {
+          return Searcher::eCallbackReturnContinue;
+      } 
+
       hwdbginfo_release_code_locations(&resolvedLoc, 1);
   }
 
-  if (err != HWDBGINFO_E_SUCCESS) {
-      return Searcher::eCallbackReturnContinue;
-  } 
- 
   auto start_addr = addrs[0];
-  HwDbgInfo_frame_context frame;
+  std::vector<HwDbgInfo_frame_context> frames (100);
   size_t n_frames;
-  err = hwdbginfo_addr_call_stack(dbginfo, start_addr, 1, &frame, &n_frames);
+  err = hwdbginfo_addr_call_stack(dbginfo, start_addr, frames.size(), frames.data(), &n_frames);
 
   if (err != HWDBGINFO_E_SUCCESS) {
       return Searcher::eCallbackReturnContinue;
@@ -86,11 +98,12 @@ HSABreakpointResolver::SearchCallback(SearchFilter &filter,
   HwDbgInfo_code_location loc;
   std::vector<char> func_name (100);
   size_t func_name_len;
-  err = hwdbginfo_frame_context_details(frame, &pc, &fp, &mp, &loc, func_name.size(), func_name.data(), &func_name_len);
-  
-  if (m_type == Type::AllKernels || ConstString(func_name.data()) == m_kernel_name) {
+  err = hwdbginfo_frame_context_details(frames[0], &pc, &fp, &mp, &loc, func_name.size(), func_name.data(), &func_name_len);
+
+  auto kernel_name = static_cast<SymbolFileAMDHSA*>(sym_file)->GetKernelName();
+  if (ConstString(func_name.data()) == m_kernel_name || kernel_name == m_kernel_name) {
       m_breakpoint->AddLocation(addrs[0]);
   }
-  
+
   return Searcher::eCallbackReturnContinue;
 }

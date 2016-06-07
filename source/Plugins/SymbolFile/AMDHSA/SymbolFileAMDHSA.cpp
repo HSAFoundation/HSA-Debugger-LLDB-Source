@@ -395,3 +395,17 @@ SymbolFileAMDHSA::GetStepOutAddresses (HwDbgInfo_addr start_addr)
 {
     return GetStepAddresses(start_addr, true);
 }
+
+ConstString
+SymbolFileAMDHSA::GetKernelName() {
+    auto symtab = m_obj_file->GetSymtab();
+
+    if (!symtab) return ConstString("");
+
+    for (size_t i = 0; i < symtab->GetNumSymbols(); ++i) {
+        auto sym = symtab->SymbolAtIndex(i);
+        if (sym && sym->GetType() == eSymbolTypeResolver) {
+            return sym->GetName();
+        }
+    }
+}

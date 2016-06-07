@@ -36,7 +36,7 @@ ThreadGDBRemoteHSA::CreateRegisterContextForFrame (StackFrame *frame)
             bool read_all_registers_at_once = !gdb_process->GetGDBRemote().GetpPacketSupported (GetID());
 
             auto& reg_info = gdb_process->m_hsa_register_info;
-            reg_ctx_sp.reset (new GDBRemoteRegisterContext (*this, concrete_frame_idx, reg_info, read_all_registers_at_once));
+            reg_ctx_sp.reset (new GDBRemoteRegisterContextHSA (*this, concrete_frame_idx, reg_info, read_all_registers_at_once));
         }
     }
     else

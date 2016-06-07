@@ -123,7 +123,7 @@ bool RegisterContextHSA::ReadAllRegisters() {
 
         lldb::addr_t pc;
         lldb::addr_t fp;
-        unwinder.DoGetFrameInfoAtIndex(m_concrete_frame_idx, pc, fp);
+        unwinder.DoGetFrameInfoAtIndex(m_concrete_frame_idx, fp, pc);
         m_registers[0] = pc;
         m_registers[1] = fp;
         m_registers[2] = 0;

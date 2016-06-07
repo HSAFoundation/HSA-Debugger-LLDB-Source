@@ -196,6 +196,9 @@ public:
     std::vector<HwDbgInfo_addr>
     GetStepOverAddresses (HwDbgInfo_addr start_addr);
 
+    lldb_private::ConstString
+    GetKernelName();
+
 private:
     std::vector<HwDbgInfo_addr>
     GetStepAddresses (HwDbgInfo_addr start_addr, bool step_out);

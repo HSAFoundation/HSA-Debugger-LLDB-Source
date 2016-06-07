@@ -24,6 +24,7 @@
 #include "Plugins/Process/HSA/ThreadPlanStepOverHSA.h"
 
 #include "ThreadGDBRemote.h"
+#include "GDBRemoteRegisterContextHSA.h"
 
 class StringExtractor;
 
@@ -62,6 +63,8 @@ public:
                                     const SymbolContext &addr_context,
                                     lldb::RunMode stop_other_threads,
                                     LazyBool step_out_avoids_code_withoug_debug_info);
+
+    friend class GDBRemoteRegisterContextHSA;
 };
 
 } // namespace process_gdb_remote

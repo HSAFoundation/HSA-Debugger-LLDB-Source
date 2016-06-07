@@ -16,7 +16,10 @@
 #include "lldb/lldb-private.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/ModuleList.h"
+#include "lldb/Symbol/SymbolVendor.h"
+#include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Target/Target.h"
+#include "Plugins/SymbolFile/AMDHSA/SymbolFileAMDHSA.h"
 #include "HSABreakpointResolver.h"
 
 using namespace lldb;
@@ -128,10 +131,18 @@ HSARuntime::ModulesDidLoad (const ModuleList &module_list)
         auto mod = module_list.GetModuleAtIndex (i);
         if (IsHSAModule (*mod))
         {
-            auto& target = GetProcess()->GetTarget();
-            SearchFilterSP filter_sp (new SearchFilterForUnconstrainedSearches(target.shared_from_this()));
-            BreakpointResolverSP resolver_sp (new HSABreakpointResolver(nullptr));
-            target.CreateBreakpoint(filter_sp, resolver_sp, false, false, false);
+            auto sym_vendor = mod->GetSymbolVendor();
+            if (sym_vendor) {
+                auto sym_file = sym_vendor->GetSymbolFile();
+                if (sym_file) {
+                    auto kernel_name = static_cast<SymbolFileAMDHSA*>(sym_file)->GetKernelName();
+
+                    auto& target = GetProcess()->GetTarget();
+                    SearchFilterSP filter_sp (new SearchFilterForUnconstrainedSearches(target.shared_from_this()));
+                    BreakpointResolverSP resolver_sp (new HSABreakpointResolver(nullptr, kernel_name));
+                    target.CreateBreakpoint(filter_sp, resolver_sp, false, false, false);
+                }
+            }
 
         }
     }

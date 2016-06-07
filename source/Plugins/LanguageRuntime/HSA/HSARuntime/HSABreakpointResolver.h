@@ -38,15 +38,6 @@ public:
     {
     }
 
-    HSABreakpointResolver(Breakpoint *bkpt):
-                         BreakpointResolver (bkpt, BreakpointResolver::NameResolver),
-                         m_kernel_name(""),
-                         m_line(0),
-                         m_type(Type::AllKernels)
-
-    {
-    }
-
     void
     GetDescription(Stream *strm) override
     {
