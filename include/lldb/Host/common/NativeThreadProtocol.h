@@ -14,6 +14,7 @@
 
 #include "lldb/lldb-private-forward.h"
 #include "lldb/lldb-types.h"
+#include "lldb/Core/ArchSpec.h"
 #include "lldb/Host/Debug.h"
 
 namespace lldb_private
@@ -26,6 +27,7 @@ namespace lldb_private
     {
     public:
         NativeThreadProtocol (NativeProcessProtocol *process, lldb::tid_t tid);
+        NativeThreadProtocol (NativeProcessProtocol *process, lldb::tid_t tid, ArchSpec arch);
 
         virtual ~NativeThreadProtocol()
         {
@@ -64,6 +66,9 @@ namespace lldb_private
         NativeProcessProtocolSP
         GetProcess ();
 
+        virtual bool
+        GetArchitecture (ArchSpec &arch) const;
+
         // ---------------------------------------------------------------------
         // Thread-specific watchpoints
         // ---------------------------------------------------------------------
@@ -76,6 +81,7 @@ namespace lldb_private
     protected:
         NativeProcessProtocolWP m_process_wp;
         lldb::tid_t m_tid;
+        lldb_private::ArchSpec m_arch;
     };
 }
 

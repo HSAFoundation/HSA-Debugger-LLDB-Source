@@ -44,7 +44,25 @@ ThreadGDBRemote::ThreadGDBRemote (Process &process, lldb::tid_t tid) :
     m_dispatch_queue_t (LLDB_INVALID_ADDRESS),
     m_queue_kind (eQueueKindUnknown),
     m_queue_serial_number (LLDB_INVALID_QUEUE_ID),
-    m_associated_with_libdispatch_queue (eLazyBoolCalculate)
+    m_associated_with_libdispatch_queue (eLazyBoolCalculate),
+    m_arch(process.GetTarget().GetArchitecture())
+{
+    ProcessGDBRemoteLog::LogIf(GDBR_LOG_THREAD, "%p: ThreadGDBRemote::ThreadGDBRemote (pid = %i, tid = 0x%4.4x)",
+                               this, 
+                               process.GetID(),
+                               GetID());
+}
+
+ThreadGDBRemote::ThreadGDBRemote (Process &process, lldb::tid_t tid, ArchSpec arch) :
+    Thread(process, tid),
+    m_thread_name (),
+    m_dispatch_queue_name (),
+    m_thread_dispatch_qaddr (LLDB_INVALID_ADDRESS),
+    m_dispatch_queue_t (LLDB_INVALID_ADDRESS),
+    m_queue_kind (eQueueKindUnknown),
+    m_queue_serial_number (LLDB_INVALID_QUEUE_ID),
+    m_associated_with_libdispatch_queue (eLazyBoolCalculate),
+    m_arch(arch)
 {
     ProcessGDBRemoteLog::LogIf(GDBR_LOG_THREAD, "%p: ThreadGDBRemote::ThreadGDBRemote (pid = %i, tid = 0x%4.4x)",
                                this, 

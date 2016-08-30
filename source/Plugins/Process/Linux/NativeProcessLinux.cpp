@@ -217,9 +217,12 @@ namespace
     static constexpr unsigned k_ptrace_word_size = sizeof(void*);
     static_assert(sizeof(long) >= k_ptrace_word_size, "Size of long must be larger than ptrace word size");
 
-    //TODO improve
     bool IsHSAThread (NativeThreadProtocol& thread) {
-        return thread.GetID() < 166;
+        ArchSpec as;
+        if (thread.GetArchitecture(as)) {
+            return as.GetMachine() == llvm::Triple::amdgcn;
+        }
+        return false;
     }
 } // end of anonymous namespace
 
@@ -2321,8 +2324,17 @@ NativeProcessLinux::UpdateThreads ()
 bool
 NativeProcessLinux::GetArchitecture (ArchSpec &arch) const
 {
-    arch = m_arch;
-    return true;
+    if (m_current_thread_id == LLDB_INVALID_THREAD_ID) {
+        arch = m_arch;
+        return true;
+    }
+    auto thread = GetCurrentThread();
+    if (!thread) {
+        arch = m_arch;
+        return true;
+    }
+
+    return thread->GetArchitecture(arch);
 }
 
 Error
@@ -3347,14 +3359,5 @@ NativeProcessLinux::PtraceWrapper(int req, lldb::pid_t pid, void *addr, void *da
 Error
 NativeProcessLinux::GetHSABinaryFileName(std::string& name) {
     name = m_hsa_debug->GetBinaryFileName();
-    return Error();
-}
-
-
-Error
-NativeProcessLinux::GetHSAThreads(std::vector<lldb::tid_t>& threads) {
-    for (auto t : m_hsa_threads) {
-        threads.push_back(t->GetID());
-    }
     return Error();
 }

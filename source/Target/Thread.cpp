@@ -680,6 +680,7 @@ Thread::SetupForResume ()
         {
             const addr_t thread_pc = reg_ctx_sp->GetPC();
             BreakpointSiteSP bp_site_sp = GetProcess()->GetBreakpointSiteList().FindByAddress(thread_pc);
+            //HSA hack: don't step over hsa breakpoints
             if (bp_site_sp && !IsHSAThread())
             {
                 // Note, don't assume there's a ThreadPlanStepOverBreakpoint, the target may not require anything

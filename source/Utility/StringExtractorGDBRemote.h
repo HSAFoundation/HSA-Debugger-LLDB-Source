@@ -155,8 +155,7 @@ public:
         eServerPacketType__m,
         eServerPacketType_notify, // '%' notification
 
-        eServerPacketType_hsaBin,
-        eServerPacketType_hsaThreads
+        eServerPacketType_hsaBin
     };
     
     ServerPacketType

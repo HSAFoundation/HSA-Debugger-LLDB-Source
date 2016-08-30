@@ -532,8 +532,7 @@ Module::ResolveSymbolContextForAddress (const Address& so_addr, uint32_t resolve
     SectionSP section_sp (so_addr.GetSection());
 
     // Make sure the section matches this module before we try and match anything
-    // TODO fix HSA hack
-    if (true || (section_sp && section_sp->GetModule().get() == this))
+    if (section_sp && section_sp->GetModule().get() == this)
     {
         // If the section offset based address resolved itself, then this
         // is the right module.

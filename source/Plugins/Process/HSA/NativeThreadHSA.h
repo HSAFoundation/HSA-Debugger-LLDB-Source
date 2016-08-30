@@ -12,6 +12,7 @@
 
 #include "lldb/lldb-private-forward.h"
 #include "lldb/Host/common/NativeThreadProtocol.h"
+#include "lldb/Core/ArchSpec.h"
 #include "Plugins/Process/Linux/NativeThreadLinux.h"
 
 #include <map>
@@ -61,6 +62,7 @@ namespace lldb_private {
 
         Error
         RemoveWatchpoint (lldb::addr_t addr) override;
+
 
     private:
         // ---------------------------------------------------------------------

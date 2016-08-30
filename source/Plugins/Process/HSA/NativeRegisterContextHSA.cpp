@@ -1,4 +1,3 @@
-#include <fstream>
 //===-- NativeRegisterContextHSA.cpp --------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure

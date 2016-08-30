@@ -89,7 +89,7 @@ SymbolFileAMDHSA::CalculateAbilities ()
 {
     ArchSpec as;
     m_obj_file->GetArchitecture(as);
-    if (as.GetMachine() == llvm::Triple::hsail) {
+    if (as.GetMachine() == llvm::Triple::amdgcn) {
         return kAllAbilities;
     }
 

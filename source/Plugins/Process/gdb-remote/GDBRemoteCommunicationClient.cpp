@@ -1476,13 +1476,13 @@ GDBRemoteCommunicationClient::GetCurrentProcessID (bool allow_lazy)
         // If we don't get a response for $qC, check if $qfThreadID gives us a result.
         if (m_curr_pid == LLDB_INVALID_PROCESS_ID)
         {
-            std::vector<lldb::tid_t> thread_ids;
+            std::vector<std::pair<lldb::tid_t, ArchSpec>> thread_ids;
             bool sequence_mutex_unavailable;
             size_t size;
             size = GetCurrentThreadIDs (thread_ids, sequence_mutex_unavailable);
             if (size && sequence_mutex_unavailable == false)
             {
-                m_curr_pid = thread_ids.front();
+                m_curr_pid = thread_ids.front().first;
                 m_curr_pid_is_valid = eLazyBoolYes;
                 return m_curr_pid;
             }
@@ -3602,7 +3602,7 @@ GDBRemoteCommunicationClient::SendGDBStoppointTypePacket (GDBStoppointType type,
 }
 
 size_t
-GDBRemoteCommunicationClient::GetCurrentThreadIDs (std::vector<lldb::tid_t> &thread_ids, 
+GDBRemoteCommunicationClient::GetCurrentThreadIDs (std::vector<std::pair<lldb::tid_t, ArchSpec>> &thread_ids, 
                                                    bool &sequence_mutex_unavailable)
 {
     Mutex::Locker locker;
@@ -3629,7 +3629,7 @@ GDBRemoteCommunicationClient::GetCurrentThreadIDs (std::vector<lldb::tid_t> &thr
                     
                     if (tid != LLDB_INVALID_THREAD_ID)
                     {
-                        thread_ids.push_back (tid);
+                        thread_ids.emplace_back (tid, m_process_arch);
                     }
                     ch = response.GetChar();    // Skip the command separator
                 } while (ch == ',');            // Make sure we got a comma separator
@@ -3644,7 +3644,7 @@ GDBRemoteCommunicationClient::GetCurrentThreadIDs (std::vector<lldb::tid_t> &thr
         */
         if (response.IsUnsupportedResponse() && thread_ids.size() == 0 && IsConnected())
         {
-            thread_ids.push_back (1);
+            thread_ids.emplace_back (1, m_process_arch);
         }
     }
     else
@@ -4616,26 +4616,3 @@ GDBRemoteCommunicationClient::GetHSABinaryFileName() {
     return "";
 }
 
-std::vector<lldb::tid_t>
-GDBRemoteCommunicationClient::GetHSAThreads() {
-    StringExtractorGDBRemote response;
-    if (SendPacketAndWaitForResponse("hsaThreads", response, false) == PacketResult::Success)
-    {
-        Error error;
-        (void)ParseHostIOPacketResponse (response, UINT64_MAX, error);
-        std::vector<lldb::tid_t> threads;
-
-        auto n = response.GetHexMaxU64(false, 0);
-        if (n > 0) {
-            for (unsigned i = 0; i < n-1; ++i) {
-                threads.push_back(response.GetHexMaxU64(false, 0));
-                (void)response.GetChar();
-            }
-
-            threads.push_back(response.GetHexMaxU64(false, 0));
-        }
-        return threads;
-    }
-    
-    return {};
-}

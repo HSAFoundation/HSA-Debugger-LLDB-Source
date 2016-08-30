@@ -44,15 +44,6 @@ using namespace lldb_private;
 
 using hsa_pc = uint64_t;
 
-/*static OptionEnumValueElement
-data_breakpoint_enums[] =
-{
-    {HSADebugAPI::Read, "read", "Read operations only"},
-    {HSADebugAPI::NonRead, "non-read", "Write or atomic operations only"},
-    {HSADebugAPI::Atomic, "atomic", "Atomic operations only"},
-    {HSADebugAPI::All, "all", "Read, write or atomic operations"},
-    };*/
-
 
 bool CurrentlyUnimplemented(CommandReturnObject &result)
 {
@@ -601,7 +592,7 @@ protected:
         for (unsigned i=0; i < images.GetSize(); ++i) {
             auto module = images.GetModuleAtIndex(i);
             if (module) {
-                if (module->GetArchitecture().GetMachine() == llvm::Triple::hsail) {
+                if (module->GetArchitecture().GetMachine() == llvm::Triple::amdgcn) {
                     module_sp = module;
                     break;
                 }

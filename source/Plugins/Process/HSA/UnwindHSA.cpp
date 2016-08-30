@@ -53,7 +53,7 @@ UnwindHSA::DoGetFrameInfoAtIndex(uint32_t frame_idx,
     for (unsigned i=0; i < images.GetSize(); ++i) {
         auto module = images.GetModuleAtIndex(i);
         if (module) {
-            if (module->GetArchitecture().GetMachine() == llvm::Triple::hsail) {
+            if (module->GetArchitecture().GetMachine() == llvm::Triple::amdgcn) {
                 module_sp = module;
                 break;
             }

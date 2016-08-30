@@ -459,7 +459,7 @@ public:
     }
 
     size_t
-    GetCurrentThreadIDs (std::vector<lldb::tid_t> &thread_ids,
+    GetCurrentThreadIDs (std::vector<std::pair<lldb::tid_t, lldb_private::ArchSpec>> &thread_ids,
                          bool &sequence_mutex_unavailable);
     
     bool
@@ -575,9 +575,6 @@ public:
     std::string
     GetHSABinaryFileName();
     
-    std::vector<lldb::tid_t>
-    GetHSAThreads();
-
 protected:
     LazyBool m_supports_not_sending_acks;
     LazyBool m_supports_thread_suffix;

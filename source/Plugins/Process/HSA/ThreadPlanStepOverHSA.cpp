@@ -188,7 +188,7 @@ ThreadPlanStepOverHSA::SetMomentaryBreakpoints()
     for (unsigned i=0; i < images.GetSize(); ++i) {
         auto module_sp = images.GetModuleAtIndex(i);
         if (module_sp) {
-            if (module_sp->GetArchitecture().GetMachine() == llvm::Triple::hsail) {
+            if (module_sp->GetArchitecture().GetMachine() == llvm::Triple::amdgcn) {
                 module = module_sp;
                 break;
             }

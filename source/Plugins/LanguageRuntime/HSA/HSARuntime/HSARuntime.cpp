@@ -156,5 +156,5 @@ HSARuntime::SetBreakAllKernels (bool do_break) {
 
 bool 
 HSARuntime::IsHSAModule (const Module& module) {
-    return module.GetArchitecture().GetMachine() == llvm::Triple::hsail;
+    return module.GetArchitecture().GetMachine() == llvm::Triple::amdgcn;
 }

@@ -73,7 +73,7 @@ namespace
 }
 
 NativeThreadHSA::NativeThreadHSA (NativeProcessProtocol *process, lldb::tid_t tid, NativeHSADebug& hsa_debug) :
-    NativeThreadProtocol (process, tid),
+    NativeThreadProtocol (process, tid, ArchSpec("amdgcn")),
     m_state (StateType::eStateStopped),
     m_stop_info (),
     m_reg_context_sp (),

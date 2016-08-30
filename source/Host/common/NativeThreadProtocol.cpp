@@ -18,7 +18,16 @@ using namespace lldb_private;
 
 NativeThreadProtocol::NativeThreadProtocol (NativeProcessProtocol *process, lldb::tid_t tid) :
     m_process_wp (process->shared_from_this ()),
-    m_tid (tid)
+    m_tid (tid),
+    m_arch ()
+{
+    process->GetArchitecture(m_arch);
+}
+
+NativeThreadProtocol::NativeThreadProtocol (NativeProcessProtocol *process, lldb::tid_t tid, ArchSpec arch) :
+    m_process_wp (process->shared_from_this ()),
+    m_tid (tid),
+    m_arch (arch)
 {
 }
 
@@ -72,4 +81,11 @@ NativeProcessProtocolSP
 NativeThreadProtocol::GetProcess ()
 {
     return m_process_wp.lock ();
+}
+
+
+bool
+NativeThreadProtocol::GetArchitecture (ArchSpec &arch) const {
+    arch = m_arch;
+    return true;
 }

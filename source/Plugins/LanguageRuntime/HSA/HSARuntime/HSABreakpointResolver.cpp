@@ -31,7 +31,7 @@ HSABreakpointResolver::SearchCallback(SearchFilter &filter,
   if (!module_sp)
     return Searcher::eCallbackReturnContinue;
 
-  if (module_sp->GetArchitecture().GetMachine() != llvm::Triple::hsail) 
+  if (module_sp->GetArchitecture().GetMachine() != llvm::Triple::amdgcn) 
     return Searcher::eCallbackReturnContinue;    
 
   const size_t max_addrs = 10240;

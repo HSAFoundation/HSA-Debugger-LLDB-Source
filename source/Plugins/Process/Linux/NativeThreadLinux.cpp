@@ -157,13 +157,9 @@ NativeThreadLinux::GetRegisterContext ()
     if (!m_process_sp)
         return NativeRegisterContextSP ();
 
-    ArchSpec target_arch;
-    if (!m_process_sp->GetArchitecture (target_arch))
-        return NativeRegisterContextSP ();
-
     const uint32_t concrete_frame_idx = 0;
 
-    m_reg_context_sp.reset (NativeRegisterContextLinux::CreateHostNativeRegisterContextLinux(target_arch,
+    m_reg_context_sp.reset (NativeRegisterContextLinux::CreateHostNativeRegisterContextLinux(m_arch,
 											     *this,
 											     concrete_frame_idx));
 

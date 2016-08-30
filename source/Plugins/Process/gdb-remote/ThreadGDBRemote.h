@@ -32,6 +32,7 @@ class ProcessGDBRemote;
 class ThreadGDBRemote : public Thread
 {
 public:
+    ThreadGDBRemote (Process &process, lldb::tid_t tid, ArchSpec arch);
     ThreadGDBRemote (Process &process, lldb::tid_t tid);
 
     ~ThreadGDBRemote() override;
@@ -138,6 +139,8 @@ protected:
     lldb::QueueKind m_queue_kind;     // Queue info from stop reply/stop info for thread
     uint64_t m_queue_serial_number;   // Queue info from stop reply/stop info for thread
     lldb_private::LazyBool m_associated_with_libdispatch_queue;
+
+    lldb_private::ArchSpec m_arch;
 
     bool
     PrivateSetRegisterValue (uint32_t reg, 

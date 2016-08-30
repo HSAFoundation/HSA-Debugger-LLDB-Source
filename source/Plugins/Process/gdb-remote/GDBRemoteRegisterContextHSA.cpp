@@ -1,4 +1,4 @@
-#include <iostream>//===-- GDBRemoteRegisterContextHSA.cpp -------------------------*- C++ -*-===//
+//===-- GDBRemoteRegisterContextHSA.cpp -------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

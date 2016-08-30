@@ -35,6 +35,7 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
+#include "lldb/Core/Section.h"
 #include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/StreamString.h"
@@ -243,7 +244,7 @@ ProcessGDBRemote::CanDebug (lldb::TargetSP target_sp, bool plugin_specified_by_n
     if (plugin_specified_by_name)
         return true;
 
-    if (target_sp->GetArchitecture().GetMachine() == llvm::Triple::hsail)
+    if (target_sp->GetArchitecture().GetMachine() == llvm::Triple::amdgcn)
       return true;
 
     // For now we are just making sure the file exists for a given module
@@ -1684,12 +1685,12 @@ ProcessGDBRemote::UpdateThreadIDsFromStopReplyThreadsValue (std::string &value)
         // thread in big endian hex
         tid = StringConvert::ToUInt64 (value.c_str(), LLDB_INVALID_THREAD_ID, 16);
         if (tid != LLDB_INVALID_THREAD_ID)
-            m_thread_ids.push_back (tid);
+            m_thread_ids.emplace_back (tid, GetTarget().GetArchitecture());
         value.erase(0, comma_pos + 1);
     }
     tid = StringConvert::ToUInt64 (value.c_str(), LLDB_INVALID_THREAD_ID, 16);
     if (tid != LLDB_INVALID_THREAD_ID)
-        m_thread_ids.push_back (tid);
+        m_thread_ids.emplace_back (tid, GetTarget().GetArchitecture());
     return m_thread_ids.size();
 }
 
@@ -1733,8 +1734,16 @@ ProcessGDBRemote::UpdateThreadIDList ()
                     // Set the thread stop info from the JSON dictionary
                     SetThreadStopInfo (thread_dict);
                     lldb::tid_t tid = LLDB_INVALID_THREAD_ID;
-                    if (thread_dict->GetValueForKeyAsInteger<lldb::tid_t>("tid", tid))
-                        m_thread_ids.push_back(tid);
+                    if (thread_dict->GetValueForKeyAsInteger<lldb::tid_t>("tid", tid)) {
+                        StringExtractor arch;
+                        if (thread_dict->GetValueForKeyAsString("arch", arch.GetStringRef())) {
+                            m_thread_ids.emplace_back(tid, ArchSpec(arch.GetStringRef().c_str()));
+                        }
+                        else {
+                            m_thread_ids.emplace_back(tid, GetTarget().GetArchitecture());
+                        }
+                    }
+
                 }
                 return true; // Keep iterating through all thread_info objects
             });
@@ -1817,19 +1826,17 @@ ProcessGDBRemote::UpdateThreadList (ThreadList &old_thread_list, ThreadList &new
         num_thread_ids = m_thread_ids.size();
     }
 
-    auto hsa_threads = m_gdb_comm.GetHSAThreads();
-
     ThreadList old_thread_list_copy(old_thread_list);
     if (num_thread_ids > 0)
     {
         for (size_t i=0; i<num_thread_ids; ++i)
         {
-            tid_t tid = m_thread_ids[i];
+            tid_t tid = m_thread_ids[i].first;
             ThreadSP thread_sp (old_thread_list_copy.RemoveThreadByProtocolID(tid, false));
             if (!thread_sp)
             {
-                if (std::find(hsa_threads.begin(), hsa_threads.end(), tid) != hsa_threads.end())
-                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
+                if (m_thread_ids[i].second.GetMachine() == llvm::Triple::amdgcn) 
+                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid, ArchSpec{"amdgcn"}));
                 else
                     thread_sp.reset (new ThreadGDBRemote (*this, tid));
 
@@ -1961,7 +1968,8 @@ ProcessGDBRemote::SetThreadStopInfo (lldb::tid_t tid,
                                      addr_t dispatch_queue_t,
                                      std::string &queue_name,
                                      QueueKind queue_kind,
-                                     uint64_t queue_serial)
+                                     uint64_t queue_serial,
+                                     const std::string arch)
 {
     ThreadSP thread_sp;
     if (tid != LLDB_INVALID_THREAD_ID)
@@ -1977,9 +1985,8 @@ ProcessGDBRemote::SetThreadStopInfo (lldb::tid_t tid,
             if (!thread_sp)
             {
                 // Create the thread if we need to
-                // TODO fix HSA hack
-                if (thread_name == "HSA Wavefront") {
-                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
+                if (arch == "amdgcn") {
+                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid, ArchSpec(arch.c_str())));
                 }
                 else
                 {
@@ -1991,9 +1998,9 @@ ProcessGDBRemote::SetThreadStopInfo (lldb::tid_t tid,
 
         if (thread_sp)
         {
-            if (thread_name == "HSA Wavefront" && !thread_sp->IsHSAThread()) {
+            if (arch == "amdgcn" && !thread_sp->IsHSAThread()) {
                 m_thread_list.RemoveThreadByID(tid, false);
-                thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
+                thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid, ArchSpec(arch.c_str())));
                 m_thread_list.AddThread(thread_sp);
             }
 
@@ -2202,6 +2209,7 @@ ProcessGDBRemote::SetThreadStopInfo (StructuredData::Dictionary *thread_dict)
     static ConstString g_key_bytes("bytes");
     static ConstString g_key_description("description");
     static ConstString g_key_signal("signal");
+    static ConstString g_key_arch("arch");
 
     // Stop with signal and thread info
     lldb::tid_t tid = LLDB_INVALID_THREAD_ID;
@@ -2220,6 +2228,7 @@ ProcessGDBRemote::SetThreadStopInfo (StructuredData::Dictionary *thread_dict)
     std::string queue_name;
     QueueKind queue_kind = eQueueKindUnknown;
     uint64_t queue_serial_number = 0;
+    std::string arch;
     // Iterate through all of the thread dictionary key/value pairs from the structured data dictionary
 
     thread_dict->ForEach([this,
@@ -2237,7 +2246,8 @@ ProcessGDBRemote::SetThreadStopInfo (StructuredData::Dictionary *thread_dict)
                           &dispatch_queue_t,
                           &queue_name,
                           &queue_kind,
-                          &queue_serial_number]
+                          &queue_serial_number,
+                          &arch]
                           (ConstString key, StructuredData::Object* object) -> bool
     {
         if (key == g_key_tid)
@@ -2367,6 +2377,11 @@ ProcessGDBRemote::SetThreadStopInfo (StructuredData::Dictionary *thread_dict)
         }
         else if (key == g_key_signal)
             signo = object->GetIntegerValue(LLDB_INVALID_SIGNAL_NUMBER);
+        else if (key == g_key_arch)
+        {
+            arch = object->GetStringValue();
+        }
+
         return true; // Keep iterating through all dictionary key/value pairs
     });
 
@@ -2384,7 +2399,8 @@ ProcessGDBRemote::SetThreadStopInfo (StructuredData::Dictionary *thread_dict)
                               dispatch_queue_t,
                               queue_name,
                               queue_kind,
-                              queue_serial_number);
+                              queue_serial_number,
+                              arch);
 }
 
 StateType
@@ -2433,6 +2449,8 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
             QueueKind queue_kind = eQueueKindUnknown;
             uint64_t queue_serial_number = 0;
             ExpeditedRegisterMap expedited_register_map;
+            std::string arch;
+
             while (stop_packet.GetNameColonValue(key, value))
             {
                 if (key.compare("metype") == 0)
@@ -2465,12 +2483,12 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                         // thread in big endian hex
                         tid = StringConvert::ToUInt64 (value.c_str(), LLDB_INVALID_THREAD_ID, 16);
                         if (tid != LLDB_INVALID_THREAD_ID)
-                            m_thread_ids.push_back (tid);
+                            m_thread_ids.emplace_back (tid, GetTarget().GetArchitecture());
                         value.erase(0, comma_pos + 1);
                     }
                     tid = StringConvert::ToUInt64 (value.c_str(), LLDB_INVALID_THREAD_ID, 16);
                     if (tid != LLDB_INVALID_THREAD_ID)
-                        m_thread_ids.push_back (tid);
+                        m_thread_ids.emplace_back (tid, GetTarget().GetArchitecture());
                 }
                 else if (key.compare("thread-pcs") == 0)
                 {
@@ -2560,6 +2578,10 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                 {
                     reason.swap(value);
                 }
+                else if (key.compare("arch") == 0)
+                {
+                    arch.swap(value);
+                }
                 else if (key.compare("description") == 0)
                 {
                     StringExtractor desc_extractor;
@@ -2637,7 +2659,7 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
 
                 if (!m_thread_ids.empty ())
                 {
-                    tid = m_thread_ids.front ();
+                    tid = m_thread_ids.front ().first;
                 }
             }
 
@@ -2657,7 +2679,11 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                     for (size_t i=0; i<binary.size(); ++i) bin_file << binary[i];
                 }
 
-                GetTarget().GetSharedModule(ModuleSpec(fs));
+                auto mod_sp = GetTarget().GetSharedModule(ModuleSpec(fs));
+                auto sec_sp = mod_sp->GetSectionList()->FindSectionByName(ConstString(".hsatext"));
+                GetTarget().SetSectionLoadAddress(sec_sp, 0);
+                Address addr;
+                GetTarget().ResolveLoadAddress(260, addr);
             }
 
             ThreadSP thread_sp = SetThreadStopInfo (tid,
@@ -2674,7 +2700,8 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                                                     dispatch_queue_t,
                                                     queue_name,
                                                     queue_kind,
-                                                    queue_serial_number);
+                                                    queue_serial_number,
+                                                    arch);
 
             return eStateStopped;
         }

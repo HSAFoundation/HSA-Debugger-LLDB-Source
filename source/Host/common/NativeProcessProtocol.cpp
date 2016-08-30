@@ -114,6 +114,17 @@ NativeProcessProtocol::SetExitStatus (ExitType exit_type, int status, const char
     return true;
 }
 
+std::shared_ptr<const NativeThreadProtocol>
+NativeProcessProtocol::GetCurrentThread () const
+{
+    for (auto thread_sp : m_threads)
+    {
+        if (thread_sp->GetID() == m_current_thread_id)
+            return thread_sp;
+    }
+    return std::shared_ptr<const NativeThreadProtocol> ();
+}
+
 NativeThreadProtocolSP
 NativeProcessProtocol::GetThreadAtIndex (uint32_t idx)
 {

@@ -214,6 +214,9 @@ namespace lldb_private
             return GetThreadByID (m_current_thread_id);
         }
 
+        std::shared_ptr<const NativeThreadProtocol>
+        GetCurrentThread () const;
+
         //----------------------------------------------------------------------
         // Access to inferior stdio
         //----------------------------------------------------------------------
@@ -363,12 +366,6 @@ namespace lldb_private
         GetHSABinaryFileName(std::string& name) {
             return Error ("not implemented");
         }
-
-        virtual Error
-        GetHSAThreads(std::vector<lldb::tid_t>& threads) {
-            return Error ("not implemented");
-        }
-
 
     protected:
         lldb::pid_t m_pid;

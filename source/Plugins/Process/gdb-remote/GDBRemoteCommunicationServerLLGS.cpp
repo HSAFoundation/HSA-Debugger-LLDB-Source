@@ -109,8 +109,6 @@ GDBRemoteCommunicationServerLLGS::RegisterPacketHandlers()
                                   &GDBRemoteCommunicationServerLLGS::Handle_D);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_hsaBin,
                                   &GDBRemoteCommunicationServerLLGS::Handle_hsaBin);
-    RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_hsaThreads,
-                                  &GDBRemoteCommunicationServerLLGS::Handle_hsaThreads);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_H,
                                   &GDBRemoteCommunicationServerLLGS::Handle_H);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_I,
@@ -597,6 +595,11 @@ GetJSONThreadsInfo(NativeProcessProtocol &process, bool abridged)
                             tid_stop_info.details.exception.data[i]));
             }
             thread_obj_sp->SetObject("medata", medata_array_sp);
+        }
+
+        ArchSpec arch;
+        if (thread_sp->GetArchitecture(arch)) {
+            thread_obj_sp->SetObject("arch", std::make_shared<JSONString>(arch.GetTriple().getTriple()));
         }
         // TODO: Expedite interesting regions of inferior memory
     }
@@ -1884,42 +1887,6 @@ GDBRemoteCommunicationServerLLGS::Handle_hsaBin (StringExtractorGDBRemote &packe
         return SendPacketNoLock(response.GetData(), response.GetSize());
     }
     return SendErrorResponse (0x0);
-}
-
-GDBRemoteCommunication::PacketResult
-GDBRemoteCommunicationServerLLGS::Handle_hsaThreads (StringExtractorGDBRemote &packet)
-{
-    Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_THREAD));
-
-    if (log)
-        log->Printf ("GDBRemoteCommunicationServerLLGS::%s handling hsaThreads", __FUNCTION__);
-
-
-    // Fail if we don't have a current process.
-    if (!m_debugged_process_sp || (m_debugged_process_sp->GetID () == LLDB_INVALID_PROCESS_ID))
-    {
-        if (log)
-            log->Printf ("GDBRemoteCommunicationServerLLGS::%s failed, no process available", __FUNCTION__);
-        return SendErrorResponse (0x15);
-    }
-
-    StreamGDBRemote response;
-    std::vector<lldb::tid_t> threads;
-    auto err = m_debugged_process_sp->GetHSAThreads(threads);
-
-    response.PutHex64(threads.size());
-    response.PutChar(';');
-        
-    if (!threads.empty()) {
-        for (unsigned i = 0; i < threads.size()-1; ++i) {
-            response.PutHex64(threads[i]);
-            response.PutChar(',');
-        }
-
-        response.PutHex64(threads[threads.size()-1]);
-    }
-
-    return SendPacketNoLock(response.GetData(), response.GetSize());
 }
 
 GDBRemoteCommunication::PacketResult

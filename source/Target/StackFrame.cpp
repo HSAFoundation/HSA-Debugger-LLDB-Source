@@ -412,26 +412,6 @@ StackFrame::GetSymbolContext (uint32_t resolve_scope)
             }
         }
 
-        //Probably HSA, set to the HSA module
-        if (!m_sc.module_sp) 
-        {
-            if (m_sc.target_sp) {
-                auto& images = m_sc.target_sp->GetImages();
-
-                for (unsigned i=0; i < images.GetSize(); ++i) {
-                    auto module_sp = images.GetModuleAtIndex(i);
-                    if (module_sp) {
-                        if (module_sp->GetArchitecture().GetMachine() == llvm::Triple::hsail) {
-                            m_sc.module_sp = module_sp;
-                            m_flags.Set(eSymbolContextModule); 
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-
         if (m_sc.module_sp)
         {
             // We have something in our stack frame symbol context, lets check

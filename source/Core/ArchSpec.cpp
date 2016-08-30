@@ -151,7 +151,7 @@ static const CoreDefinition g_core_definitions[] =
     { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba4  , "kalimba4" },
     { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba5  , "kalimba5" },
 
-    { eByteOrderLittle, 8, 1, 1 , llvm::Triple::hsail , ArchSpec::eCore_amdgpu  , "amdgpu" }
+    { eByteOrderLittle, 8, 1, 1 , llvm::Triple::amdgcn , ArchSpec::eCore_amdgpu  , "amdgcn" }
 };
 
 // Ensure that we have an entry in the g_core_definitions for each core. If you comment out an entry above,

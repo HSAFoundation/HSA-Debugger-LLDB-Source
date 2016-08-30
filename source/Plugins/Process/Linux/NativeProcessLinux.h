@@ -118,9 +118,6 @@ namespace process_linux {
         Error
         GetHSABinaryFileName(std::string& name) override;
 
-        Error
-        GetHSAThreads(std::vector<lldb::tid_t>& threads) override;
-
         NativeThreadLinuxSP
         GetThreadByID(lldb::tid_t id);
 
@@ -282,7 +279,7 @@ namespace process_linux {
         Error
         GetSoftwareBreakpointPCOffset(uint32_t &actual_opcode_size);
 
-        //TODO improve
+        //TODO this can be made more robust when the debug API gives us kernel load addresses
         bool
         IsHSAAddress (lldb::addr_t addr) {
             return addr < 0x1000;
