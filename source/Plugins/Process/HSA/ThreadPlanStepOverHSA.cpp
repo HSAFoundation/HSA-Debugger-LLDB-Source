@@ -45,6 +45,7 @@ ThreadPlanStepOverHSA::ThreadPlanStepOverHSA
 
 ThreadPlanStepOverHSA::~ThreadPlanStepOverHSA ()
 {
+    ClearMomentaryBreakpoints();
 }
 
 void
