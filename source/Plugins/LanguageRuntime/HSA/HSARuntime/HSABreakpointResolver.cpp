@@ -85,6 +85,12 @@ HSABreakpointResolver::SearchCallback(SearchFilter &filter,
       hwdbginfo_release_code_locations(&resolvedLoc, 1);
   }
 
+  auto kernel_name = static_cast<SymbolFileAMDHSA*>(sym_file)->GetKernelName();
+  if (kernel_name == m_kernel_name) {
+      m_breakpoint->AddLocation(addrs[0]);
+      return Searcher::eCallbackReturnContinue;
+  }
+
   auto start_addr = addrs[0];
   std::vector<HwDbgInfo_frame_context> frames (100);
   size_t n_frames;
@@ -100,7 +106,6 @@ HSABreakpointResolver::SearchCallback(SearchFilter &filter,
   size_t func_name_len;
   err = hwdbginfo_frame_context_details(frames[0], &pc, &fp, &mp, &loc, func_name.size(), func_name.data(), &func_name_len);
 
-  auto kernel_name = static_cast<SymbolFileAMDHSA*>(sym_file)->GetKernelName();
   if (ConstString(func_name.data()) == m_kernel_name || kernel_name == m_kernel_name) {
       m_breakpoint->AddLocation(addrs[0]);
   }

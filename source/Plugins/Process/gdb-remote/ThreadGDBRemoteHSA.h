@@ -36,8 +36,8 @@ class ProcessGDBRemoteHSA;
 class ThreadGDBRemoteHSA : public ThreadGDBRemote
 {
 public:
-    ThreadGDBRemoteHSA (Process &process, lldb::tid_t tid, ArchSpec arch) 
-        : ThreadGDBRemote (process, tid, arch) {}
+    ThreadGDBRemoteHSA (Process &process, lldb::tid_t tid) 
+        : ThreadGDBRemote (process, tid) {}
 
     ~ThreadGDBRemoteHSA(){}
 

@@ -1836,7 +1836,7 @@ ProcessGDBRemote::UpdateThreadList (ThreadList &old_thread_list, ThreadList &new
             if (!thread_sp)
             {
                 if (m_thread_ids[i].second.GetMachine() == llvm::Triple::amdgcn) 
-                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid, ArchSpec{"amdgcn"}));
+                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
                 else
                     thread_sp.reset (new ThreadGDBRemote (*this, tid));
 
@@ -1986,7 +1986,7 @@ ProcessGDBRemote::SetThreadStopInfo (lldb::tid_t tid,
             {
                 // Create the thread if we need to
                 if (arch == "amdgcn") {
-                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid, ArchSpec(arch.c_str())));
+                    thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
                 }
                 else
                 {
@@ -2000,7 +2000,7 @@ ProcessGDBRemote::SetThreadStopInfo (lldb::tid_t tid,
         {
             if (arch == "amdgcn" && !thread_sp->IsHSAThread()) {
                 m_thread_list.RemoveThreadByID(tid, false);
-                thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid, ArchSpec(arch.c_str())));
+                thread_sp.reset (new ThreadGDBRemoteHSA (*this, tid));
                 m_thread_list.AddThread(thread_sp);
             }
 
