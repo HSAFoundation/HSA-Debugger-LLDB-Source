@@ -858,8 +858,6 @@ protected:
     virtual bool
     DoExecute (Args& command, CommandReturnObject &result)
     {
-        return CurrentlyUnimplemented(result);
-
         auto target_sp = m_exe_ctx.GetTargetSP();
         Stream &s = result.GetOutputStream();
         Error error;
@@ -923,6 +921,7 @@ protected:
                 s.PutHex8(mem[i]);
                 s << ' ';
             }
+            s << "\n";
                 
         }
 
